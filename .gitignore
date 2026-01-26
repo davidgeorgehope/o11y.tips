@@ -1,0 +1,226 @@
+# =========================
+# Dependencies
+# =========================
+node_modules/
+admin/node_modules/
+.pnpm-store/
+.yarn/
+.npm/
+
+# =========================
+# Build outputs
+# =========================
+dist/
+admin/dist/
+build/
+*.tsbuildinfo
+
+# =========================
+# Secrets & Credentials
+# =========================
+# Environment files
+.env
+.env.*
+!.env.example
+.envrc
+
+# API keys and tokens
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Cloud provider credentials
+.aws/
+.azure/
+.gcp/
+credentials.json
+service-account*.json
+*-credentials.json
+*_credentials.json
+
+# SSH keys
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+*.ppk
+
+# Auth tokens
+.npmrc
+.yarnrc
+.docker/config.json
+auth.json
+token.json
+tokens.json
+secrets.json
+secrets.yaml
+secrets.yml
+
+# =========================
+# Database
+# =========================
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sql.gz
+*.dump
+
+# =========================
+# Generated Output
+# =========================
+# Ignore contents of output but keep directory and specific static assets
+output/*
+!output/.gitkeep
+!output/favicon.svg
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# =========================
+# Process Managers
+# =========================
+# PM2
+.pm2/
+ecosystem.config.js.bak
+dump.rdb
+
+# Supervisor/systemd
+*.pid
+*.sock
+
+# =========================
+# IDE & Editors
+# =========================
+# VSCode
+.vscode/
+*.code-workspace
+
+# JetBrains
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Vim
+*.swp
+*.swo
+*.swn
+*~
+.netrwhist
+
+# Emacs
+*~
+\#*\#
+.#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# =========================
+# OS Generated
+# =========================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# =========================
+# Testing & Coverage
+# =========================
+coverage/
+.nyc_output/
+*.lcov
+.coverage
+htmlcov/
+.tox/
+.pytest_cache/
+.jest/
+
+# =========================
+# Drizzle ORM
+# =========================
+drizzle/
+
+# =========================
+# Temporary Files
+# =========================
+tmp/
+temp/
+.tmp/
+.temp/
+*.tmp
+*.temp
+*.bak
+*.backup
+*.orig
+*.cache
+
+# =========================
+# Package files
+# =========================
+*.tgz
+*.tar.gz
+*.zip
+
+# =========================
+# Debug files
+# =========================
+.node_repl_history
+.eslintcache
+.stylelintcache
+.prettiercache
+
+# =========================
+# Optional local files
+# =========================
+# Keep these in version control templates
+!.env.example
+!.gitkeep
+!.dockerignore
+
+# =========================
+# Claude Code
+# =========================
+.claude/
+
+# =========================
+# Misc
+# =========================
+test-*.html
+*.bak

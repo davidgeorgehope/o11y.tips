@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{TITLE}}</title>
+  <meta name="description" content="{{DESCRIPTION}}">
+  <link rel="canonical" href="{{CANONICAL_URL}}">
+  <link rel="icon" type="image/svg+xml" href="/output/favicon.svg">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="{{TITLE}}">
+  <meta property="og:description" content="{{DESCRIPTION}}">
+  <meta property="og:image" content="{{OG_IMAGE}}">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="{{CANONICAL_URL}}">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{TITLE}}">
+  <meta name="twitter:description" content="{{DESCRIPTION}}">
+  <meta name="twitter:image" content="{{OG_IMAGE}}">
+
+  <!-- Author -->
+  <meta name="author" content="{{AUTHOR_NAME}}">
+  <link rel="author" href="{{AUTHOR_LINKEDIN}}">
+
+  <!-- Structured Data -->
+  {{SCHEMA_MARKUP}}
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Custom Styles -->
+  <style>
+    .prose {
+      max-width: 65ch;
+      line-height: 1.75;
+    }
+    .prose h1 { font-size: 2.25em; font-weight: 800; margin-top: 0; margin-bottom: 0.8em; line-height: 1.1; }
+    .prose h2 { font-size: 1.5em; font-weight: 700; margin-top: 2em; margin-bottom: 1em; line-height: 1.3; }
+    .prose h3 { font-size: 1.25em; font-weight: 600; margin-top: 1.6em; margin-bottom: 0.6em; line-height: 1.4; }
+    .prose h4 { font-size: 1em; font-weight: 600; margin-top: 1.5em; margin-bottom: 0.5em; }
+    .prose p { margin-bottom: 1.25em; }
+    .prose a { color: #2563eb; text-decoration: underline; text-underline-offset: 2px; }
+    .prose a:hover { color: #1d4ed8; }
+    .prose strong { font-weight: 600; color: #111827; }
+    .prose ul, .prose ol { margin-top: 1.25em; margin-bottom: 1.25em; padding-left: 1.625em; }
+    .prose li { margin-top: 0.5em; margin-bottom: 0.5em; }
+    .prose ul > li { list-style-type: disc; }
+    .prose ol > li { list-style-type: decimal; }
+    .prose blockquote {
+      border-left: 4px solid #3b82f6;
+      padding-left: 1em;
+      margin: 1.6em 0;
+      font-style: italic;
+      color: #4b5563;
+    }
+    .prose pre {
+      background-color: #1e293b;
+      color: #e2e8f0;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      overflow-x: auto;
+      margin: 1.5em 0;
+      font-size: 0.875em;
+      line-height: 1.7;
+    }
+    .prose code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.875em;
+    }
+    .prose :not(pre) > code {
+      background-color: #f1f5f9;
+      padding: 0.2em 0.4em;
+      border-radius: 0.25rem;
+      color: #1e293b;
+    }
+    .prose img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 0.5rem;
+      margin: 1.5em 0;
+    }
+    .prose hr {
+      border: 0;
+      border-top: 1px solid #e5e7eb;
+      margin: 3em 0;
+    }
+    .prose table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 2em 0;
+    }
+    .prose th, .prose td {
+      border: 1px solid #e5e7eb;
+      padding: 0.75rem 1rem;
+      text-align: left;
+    }
+    .prose th {
+      background-color: #f9fafb;
+      font-weight: 600;
+    }
+
+    /* Interactive component container */
+    .component-container {
+      margin: 2em 0;
+      padding: 1.5em;
+      background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+      border-radius: 0.75rem;
+      border: 1px solid #bae6fd;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-900 antialiased">
+  <!-- Navigation -->
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <nav class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <a href="/" class="text-xl font-bold text-gray-900 hover:text-sky-500 transition-colors">
+          <span class="text-sky-500">o11y</span>.tips
+        </a>
+        <div class="flex items-center gap-4">
+          <a href="/{{NICHE_SLUG}}" class="text-sm text-gray-600 hover:text-sky-500 transition-colors">
+            {{NICHE_NAME}}
+          </a>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <article>
+      <!-- Article Header -->
+      <header class="mb-12">
+        <h1 class="text-4xl sm:text-5xl font-extrabold text-gray-900 mb-6 leading-tight">
+          {{TITLE}}
+        </h1>
+
+        <p class="text-xl text-gray-600 mb-6">
+          {{DESCRIPTION}}
+        </p>
+
+        <div class="flex items-center gap-4 text-sm text-gray-500">
+          <a href="{{AUTHOR_LINKEDIN}}" target="_blank" rel="noopener" class="flex items-center gap-2 hover:text-sky-500 transition-colors">
+            <span class="font-medium text-gray-700">{{AUTHOR_NAME}}</span>
+          </a>
+          <span class="text-gray-300">|</span>
+          <time datetime="{{PUBLISHED_ISO}}">
+            {{PUBLISHED_DATE}}
+          </time>
+        </div>
+      </header>
+
+      <!-- Hero Image -->
+      {{#if HERO_IMAGE}}
+      <figure class="mb-12 -mx-4 sm:mx-0">
+        <img
+          src="{{HERO_IMAGE}}"
+          alt="{{HERO_ALT}}"
+          class="w-full rounded-none sm:rounded-xl shadow-lg"
+          loading="eager"
+        >
+      </figure>
+      {{/if}}
+
+      <!-- Article Content -->
+      <div class="prose prose-lg max-w-none">
+        {{CONTENT}}
+      </div>
+
+      <!-- Interactive Components Container -->
+      <div id="components-root"></div>
+    </article>
+
+    <!-- Related Content -->
+    <aside class="mt-16 pt-8 border-t border-gray-200">
+      <h2 class="text-lg font-semibold text-gray-900 mb-4">
+        More from {{NICHE_NAME}}
+      </h2>
+      <a href="/{{NICHE_SLUG}}" class="text-blue-600 hover:underline">
+        View all articles &rarr;
+      </a>
+    </aside>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t border-gray-200 mt-16">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div class="flex flex-col gap-6">
+        <!-- Author Bio -->
+        <div class="flex items-center gap-4 pb-6 border-b border-gray-100">
+          <div>
+            <p class="text-sm text-gray-500 mb-1">Written by</p>
+            <p class="font-semibold text-gray-900">{{AUTHOR_NAME}}</p>
+            <p class="text-sm text-gray-600">{{AUTHOR_BIO}}</p>
+            <div class="flex gap-3 mt-2">
+              <a href="{{AUTHOR_LINKEDIN}}" target="_blank" rel="noopener" class="text-gray-400 hover:text-sky-500 transition-colors" aria-label="LinkedIn">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
+              </a>
+              <a href="https://twitter.com/{{AUTHOR_TWITTER}}" target="_blank" rel="noopener" class="text-gray-400 hover:text-sky-500 transition-colors" aria-label="Twitter">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+              </a>
+            </div>
+          </div>
+        </div>
+        <!-- Copyright -->
+        <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+          <p class="text-gray-500">&copy; {{YEAR}} o11y.tips. All rights reserved.</p>
+          <a href="/{{NICHE_SLUG}}" class="text-gray-500 hover:text-sky-500 transition-colors">
+            More {{NICHE_NAME}} articles
+          </a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- React and Interactive Components -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+
+  {{COMPONENT_SCRIPT}}
+</body>
+</html>
