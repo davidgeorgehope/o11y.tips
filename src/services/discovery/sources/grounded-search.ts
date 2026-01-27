@@ -15,13 +15,15 @@ export const groundedSearchSource: DiscoverySource = {
       try {
         logger.debug('Running grounded search', { query });
 
+        const currentYear = new Date().getFullYear();
         const response = await generateWithGeminiGroundedSearch(
-          buildSearchPrompt(query),
+          buildSearchPrompt(query, currentYear),
           {
-            systemPrompt: `You are a research assistant finding developer pain points and questions.
+            systemPrompt: `You are a research assistant finding developer pain points from ${currentYear}.
 Extract specific questions, problems, and frustrations developers are experiencing.
 Focus on real issues from forums, discussions, and Q&A sites.
-Return structured data about each discovered pain point.`,
+Return structured data about each discovered pain point.
+When referencing dates, use ${currentYear} as the current year.`,
             temperature: 0.7,
           }
         );
@@ -76,10 +78,12 @@ function buildDefaultQueries(keywords: string[]): string[] {
   return queries;
 }
 
-function buildSearchPrompt(query: string): string {
+function buildSearchPrompt(query: string, currentYear: number): string {
   return `Search for: "${query}"
 
-Find recent discussions, forum posts, and questions from developers experiencing problems or asking for help.
+Current year: ${currentYear}
+
+Find discussions, forum posts, and questions from ${currentYear} where developers are experiencing problems or asking for help.
 
 For each pain point you find, extract:
 1. The title or main question
@@ -98,7 +102,7 @@ Content: [full description of the problem]
 DISCOVERY 2:
 ...
 
-Find 3-5 relevant pain points.`;
+Find 3-5 relevant pain points from ${currentYear}.`;
 }
 
 interface ExtractedItem {

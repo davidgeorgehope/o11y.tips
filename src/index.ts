@@ -31,6 +31,16 @@ async function main() {
   app.use('/admin/*', serveStatic({ root: './admin/dist', rewriteRequestPath: (path) => path.replace('/admin', '') }));
   app.get('/admin', (c) => c.redirect('/admin/'));
 
+  // SPA fallback for admin routes - serve index.html for any unmatched /admin/* paths
+  // This allows React Router to handle client-side routing
+  app.get('/admin/*', async (c) => {
+    const indexPath = './admin/dist/index.html';
+    if (existsSync(indexPath)) {
+      return c.html(readFileSync(indexPath, 'utf-8'));
+    }
+    return c.notFound();
+  });
+
   // Serve main index page at root
   app.get('/', (c) => {
     const indexPath = join(config.paths.output, 'index.html');

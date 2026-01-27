@@ -3,6 +3,7 @@ import { createLogger } from '../../utils/logger.js';
 import { generateId } from '../../utils/hash.js';
 import * as esbuild from 'esbuild';
 import type { GeneratedComponent, ContentOutline, GenerationContext, GeneratedContent } from './types.js';
+import { validateComponentAlignment, regenerateWithAlignmentHints } from '../quality/alignment-validator.js';
 
 const logger = createLogger('generation:components');
 
@@ -32,6 +33,31 @@ export async function generateComponents(
       }
     } catch (error) {
       logger.error('Failed to generate component', { spec, error });
+    }
+  }
+
+  // Validate alignment and auto-fix components with errors
+  if (components.length > 0) {
+    const alignmentResult = await validateComponentAlignment(components, outline);
+
+    for (const issue of alignmentResult.issues.filter(i => i.severity === 'error')) {
+      const componentIndex = components.findIndex(c => c.id === issue.componentId);
+      if (componentIndex >= 0) {
+        logger.info('Regenerating component with alignment fix', {
+          id: issue.componentId,
+          issue: issue.description,
+        });
+        const fixedComponent = await regenerateWithAlignmentHints(
+          components[componentIndex],
+          issue.suggestion,
+          { title: content.title, description: content.description }
+        );
+        components[componentIndex] = fixedComponent;
+      }
+    }
+
+    if (alignmentResult.suggestions.length > 0) {
+      logger.debug('Alignment suggestions', { suggestions: alignmentResult.suggestions });
     }
   }
 
