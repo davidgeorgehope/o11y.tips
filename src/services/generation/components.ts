@@ -96,7 +96,13 @@ Requirements:
 - Include Tailwind CSS classes for styling
 - Make components self-contained (no external dependencies except React)
 - Export the component as default
-- Include helpful comments`,
+
+CRITICAL - STRING SYNTAX RULES (violations will break the build):
+- NEVER use template literals (backticks) anywhere in your code
+- For className with conditions, use string concatenation: "base " + (condition ? "a" : "b")
+- For multi-line strings, use regular quotes with + concatenation
+- For dynamic strings, use: "Hello " + name + "!"
+- This applies to ALL strings, not just className`,
   });
 
   // Extract the code from the response
@@ -144,14 +150,24 @@ ${componentExamples}
 Write a complete TypeScript React component. Include:
 1. Proper TypeScript types/interfaces
 2. React useState/useEffect hooks as needed
-3. Tailwind CSS styling (use regular strings for className, NOT template literals)
+3. Tailwind CSS styling
 4. Accessibility attributes (aria-labels, etc.)
 5. Clear, educational UI
 
-IMPORTANT RULES:
-- Use regular string concatenation for className, NOT template literals
-- Example: className={"text-lg " + (isActive ? "text-blue-500" : "text-gray-500")}
-- Do NOT use: className={\`text-lg \${isActive ? "text-blue-500" : "text-gray-500"}\`}
+CRITICAL - NO TEMPLATE LITERALS (backticks):
+Template literals cause build failures. You MUST use string concatenation instead.
+
+WRONG (will fail):
+  className={\`px-4 \${active ? "bg-blue-500" : "bg-gray-500"}\`}
+  const msg = \`Hello \${name}\`;
+
+CORRECT (use this):
+  className={"px-4 " + (active ? "bg-blue-500" : "bg-gray-500")}
+  const msg = "Hello " + name;
+
+This rule applies to ALL strings in your entire component, not just className.
+
+Other rules:
 - All imports must be at the top (React, useState, useEffect, etc.)
 - Export the component as default
 
@@ -164,11 +180,13 @@ The component should be named ${generateComponentName(spec.type)}.`;
 PREVIOUS ATTEMPT FAILED with this error:
 ${previousError}
 
-Please fix this issue in your new attempt. Pay close attention to:
-- Syntax errors (especially template literals in JSX)
-- Missing imports
-- TypeScript type errors
-- JSX structure`;
+The most common cause is using template literals (backticks). Search your code for any \` character and replace with string concatenation using + and regular quotes.
+
+Fix checklist:
+1. Replace ALL template literals with string concatenation
+2. Check for missing imports
+3. Verify TypeScript types
+4. Ensure valid JSX structure`;
   }
 
   return prompt;
