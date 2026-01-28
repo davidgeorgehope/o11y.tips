@@ -306,6 +306,51 @@ class ApiClient {
     });
   }
 
+  async chatWithContent(
+    id: string,
+    data: {
+      message: string;
+      currentContent?: string;
+      conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
+      includePreview?: boolean;
+    }
+  ) {
+    return this.request<{
+      response: string;
+      explanation: string | null;
+      diff: string | null;
+      updatedContent: string | null;
+      usage: { inputTokens: number; outputTokens: number; totalTokens: number };
+    }>('/content/' + id + '/chat', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getContentPreview(id: string) {
+    return this.request<{
+      html: string;
+      componentStatus: ComponentGenerationResult[] | null;
+    }>('/content/' + id + '/preview');
+  }
+
+  async regenerateComponent(id: string, componentType: string) {
+    return this.request<{
+      success: boolean;
+      component?: {
+        id: string;
+        type: string;
+        name: string;
+        code: string;
+      };
+      error?: string;
+      status: ComponentGenerationResult;
+    }>('/content/' + id + '/components/regenerate', {
+      method: 'POST',
+      body: JSON.stringify({ componentType }),
+    });
+  }
+
   // Settings
   async getSettings(nicheId?: string) {
     const query = nicheId ? `?nicheId=${nicheId}` : '';
@@ -426,6 +471,7 @@ export interface Content {
   content: string;
   components?: string;
   componentBundle?: string;
+  componentStatus?: string;
   seoScore?: number;
   seoAnalysis?: string;
   slopScore?: number;
@@ -436,4 +482,26 @@ export interface Content {
   publishedUrl?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ComponentSpec {
+  type: string;
+  purpose: string;
+  placement: string;
+  requirements: string[];
+}
+
+export interface ComponentGenerationResult {
+  success: boolean;
+  component?: {
+    id: string;
+    type: string;
+    name: string;
+    code: string;
+    props: Record<string, unknown>;
+    exports: string[];
+  };
+  spec: ComponentSpec;
+  error?: string;
+  attempts: number;
 }

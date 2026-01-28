@@ -1,8 +1,12 @@
 import { Hono } from 'hono';
-import { db, content, niches, images } from '../../db/index.js';
+import { db, content, niches, images, generationJobs } from '../../db/index.js';
 import { eq, desc, and, like, or } from 'drizzle-orm';
 import { publishContent, unpublishContent, publishAsInteractive } from '../../services/publisher/deployer.js';
 import { validateContent } from '../../services/quality/validator.js';
+import { generateWithClaude } from '../../services/ai/clients.js';
+import { generateComponentWithRetry, bundleComponents, type ComponentGenerationResult } from '../../services/generation/components.js';
+import { marked } from 'marked';
+import type { GenerationContext, GeneratedContent, ContentOutline } from '../../services/generation/types.js';
 
 const app = new Hono();
 
@@ -290,6 +294,292 @@ app.get('/stats/summary', async (c) => {
   };
 
   return c.json(stats);
+});
+
+// Get content preview with rendered HTML and component status
+app.get('/:id/preview', async (c) => {
+  const id = c.req.param('id');
+
+  const article = await db.query.content.findFirst({
+    where: eq(content.id, id),
+  });
+
+  if (!article) {
+    return c.json({ error: 'Content not found' }, 404);
+  }
+
+  // Parse component status
+  const componentStatus: ComponentGenerationResult[] | null = article.componentStatus
+    ? JSON.parse(article.componentStatus)
+    : null;
+
+  // Convert markdown to HTML
+  let html = await marked.parse(article.content);
+
+  // Replace component placeholders with status indicators
+  if (componentStatus) {
+    for (const status of componentStatus) {
+      const placeholderRegex = new RegExp("<!--\\s*component:\\s*" + status.spec.type + "\\s*-->", "gi");
+
+      if (status.success) {
+        const replacement = '<div class="component-placeholder component-success" data-type="' + status.spec.type + '">' +
+          '<div class="component-badge success">Component: ' + status.spec.type + '</div>' +
+          '<div class="component-info">Purpose: ' + status.spec.purpose + '</div>' +
+          '</div>';
+        html = html.replace(placeholderRegex, replacement);
+      } else {
+        const replacement = '<div class="component-placeholder component-failed" data-type="' + status.spec.type + '">' +
+          '<div class="component-badge failed">Failed: ' + status.spec.type + '</div>' +
+          '<div class="component-info">Error: ' + (status.error || 'Unknown error') + '</div>' +
+          '</div>';
+        html = html.replace(placeholderRegex, replacement);
+      }
+    }
+  }
+
+  return c.json({
+    html,
+    componentStatus,
+  });
+});
+
+// Regenerate a single component
+app.post('/:id/components/regenerate', async (c) => {
+  const id = c.req.param('id');
+  const body = await c.req.json();
+  const { componentType } = body;
+
+  if (!componentType) {
+    return c.json({ error: 'componentType is required' }, 400);
+  }
+
+  const article = await db.query.content.findFirst({
+    where: eq(content.id, id),
+  });
+
+  if (!article) {
+    return c.json({ error: 'Content not found' }, 404);
+  }
+
+  // Get the job to retrieve the original outline
+  if (!article.jobId) {
+    return c.json({ error: 'No job associated with this content - cannot retrieve component spec' }, 400);
+  }
+
+  const job = await db.query.generationJobs.findFirst({
+    where: eq(generationJobs.id, article.jobId),
+  });
+
+  if (!job || !job.outline) {
+    return c.json({ error: 'Job outline not found - cannot regenerate component' }, 400);
+  }
+
+  const outline: ContentOutline = JSON.parse(job.outline);
+  const componentSpec = outline.interactiveComponents.find(c => c.type === componentType);
+
+  if (!componentSpec) {
+    return c.json({ error: 'Component spec not found in outline for type: ' + componentType }, 400);
+  }
+
+  // Get niche for context
+  const niche = await db.query.niches.findFirst({
+    where: eq(niches.id, article.nicheId),
+  });
+
+  if (!niche) {
+    return c.json({ error: 'Niche not found' }, 400);
+  }
+
+  // Build generation context
+  const context: GenerationContext = {
+    jobId: article.jobId,
+    nicheId: article.nicheId,
+    discoveredPost: {
+      id: article.discoveredPostId || '',
+      title: article.title,
+      content: article.content,
+      sourceUrl: '',
+    },
+    niche: {
+      name: niche.name,
+      voiceGuidelines: niche.voiceGuidelines || undefined,
+      targetAudience: niche.targetAudience || undefined,
+      keywords: niche.keywords ? JSON.parse(niche.keywords) : [],
+    },
+  };
+
+  const generatedContent: GeneratedContent = {
+    title: article.title,
+    slug: article.slug,
+    description: article.description || '',
+    content: article.content,
+    sections: [],
+  };
+
+  try {
+    // Generate the component
+    const result = await generateComponentWithRetry(context, componentSpec, generatedContent);
+
+    // Parse existing components and status
+    const components = article.components ? JSON.parse(article.components) : [];
+    const componentStatus: ComponentGenerationResult[] = article.componentStatus
+      ? JSON.parse(article.componentStatus)
+      : [];
+
+    if (result.success && result.component) {
+      // Update components array - replace existing or add new
+      const existingIndex = components.findIndex((c: { type: string }) => c.type === componentType);
+      if (existingIndex >= 0) {
+        components[existingIndex] = result.component;
+      } else {
+        components.push(result.component);
+      }
+
+      // Rebundle components
+      const componentBundle = await bundleComponents(components);
+
+      // Update component status
+      const statusIndex = componentStatus.findIndex(s => s.spec.type === componentType);
+      if (statusIndex >= 0) {
+        componentStatus[statusIndex] = result;
+      } else {
+        componentStatus.push(result);
+      }
+
+      // Save to database
+      await db.update(content)
+        .set({
+          components: JSON.stringify(components),
+          componentBundle,
+          componentStatus: JSON.stringify(componentStatus),
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(content.id, id));
+
+      return c.json({
+        success: true,
+        component: result.component,
+        status: result,
+      });
+    } else {
+      // Update status with failure
+      const statusIndex = componentStatus.findIndex(s => s.spec.type === componentType);
+      if (statusIndex >= 0) {
+        componentStatus[statusIndex] = result;
+      } else {
+        componentStatus.push(result);
+      }
+
+      await db.update(content)
+        .set({
+          componentStatus: JSON.stringify(componentStatus),
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(content.id, id));
+
+      return c.json({
+        success: false,
+        error: result.error,
+        status: result,
+      });
+    }
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: 'Component regeneration failed: ' + errorMsg }, 500);
+  }
+});
+
+// Chat with LLM for content editing
+app.post('/:id/chat', async (c) => {
+  const id = c.req.param('id');
+  const body = await c.req.json();
+  const { message, currentContent, conversationHistory = [], includePreview = false } = body;
+
+  if (!message) {
+    return c.json({ error: 'Message is required' }, 400);
+  }
+
+  const article = await db.query.content.findFirst({
+    where: eq(content.id, id),
+  });
+
+  if (!article) {
+    return c.json({ error: 'Content not found' }, 404);
+  }
+
+  // Build preview context if requested
+  let previewContext = '';
+  if (includePreview) {
+    const componentStatus: ComponentGenerationResult[] | null = article.componentStatus
+      ? JSON.parse(article.componentStatus)
+      : null;
+
+    const renderedHtml = await marked.parse(currentContent || article.content);
+
+    previewContext = '\n\nPREVIEW CONTEXT (rendered HTML and component status):\n';
+    previewContext += '--- Rendered HTML Preview ---\n';
+    previewContext += renderedHtml.substring(0, 3000); // Limit HTML size
+    if (renderedHtml.length > 3000) {
+      previewContext += '\n... (truncated)\n';
+    }
+
+    if (componentStatus && componentStatus.length > 0) {
+      previewContext += '\n\n--- Component Status ---\n';
+      for (const status of componentStatus) {
+        previewContext += 'Component: ' + status.spec.type + '\n';
+        previewContext += '  Status: ' + (status.success ? 'SUCCESS' : 'FAILED') + '\n';
+        previewContext += '  Purpose: ' + status.spec.purpose + '\n';
+        if (!status.success && status.error) {
+          previewContext += '  Error: ' + status.error + '\n';
+        }
+        previewContext += '  Attempts: ' + status.attempts + '\n\n';
+      }
+    }
+  }
+
+  let systemPrompt = "You are a technical content editor helping to improve observability and technical articles.\n\nYour role:\n- Help the user refine, edit, and improve their article content\n- Make changes that maintain technical accuracy and a professional, direct writing style\n- Remove AI-generated \"slop\" patterns: unnecessary filler words, hedging language, buzzwords, and overwrought phrases";
+
+  if (includePreview) {
+    systemPrompt += "\n- Diagnose rendering or formatting issues based on the HTML preview\n- Identify and explain component generation failures";
+  }
+
+  systemPrompt += "\n\nAvoid these patterns:\n- Hedging: \"It's worth noting that\", \"It's important to understand\", \"Keep in mind that\"\n- Filler: \"In today's world\", \"As we know\", \"needless to say\"\n- Buzzwords: \"leverage\", \"utilize\", \"paradigm\", \"synergy\", \"game-changer\"\n- Overwrought: \"dive deep\", \"journey\", \"landscape\", \"unlock\", \"empower\"\n- Unnecessary transitions: \"Furthermore\", \"Moreover\", \"Additionally\" (when not needed)\n\nWriting style guidelines:\n- Be direct and concise\n- Use active voice\n- Prefer concrete examples over abstract statements\n- Maintain technical accuracy\n- Keep the reader engaged without being flashy\n\nResponse format:\nAlways structure your response with these XML-like tags:\n\n<explanation>\nBrief explanation of what changes you're making and why (2-3 sentences max)\n</explanation>\n\n<diff>\nShow the key changes in a readable diff format:\n- OLD: [original text snippet]\n+ NEW: [revised text snippet]\n(Only show the most significant changes, not every minor edit)\n</diff>\n\n<content>\nThe complete updated markdown content\n</content>\n\nIf the user's request doesn't require content changes (e.g., they're asking a question), omit the <diff> and <content> tags and just provide your response in <explanation>.";
+
+  // Build the conversation prompt
+  let conversationPrompt = '';
+  for (const msg of conversationHistory) {
+    if (msg.role === 'user') {
+      conversationPrompt += 'User: ' + msg.content + '\n\n';
+    } else {
+      conversationPrompt += 'Assistant: ' + msg.content + '\n\n';
+    }
+  }
+
+  const userPrompt = 'Article Title: ' + article.title + '\n\nCurrent Content:\n```markdown\n' + (currentContent || article.content) + '\n```' + previewContext + '\n\n' + conversationPrompt + 'User request: ' + message;
+
+  try {
+    const response = await generateWithClaude(userPrompt, {
+      systemPrompt,
+      maxTokens: 8192,
+      temperature: 0.7,
+    });
+
+    // Parse the response to extract parts
+    const explanationMatch = response.content.match(/<explanation>([\s\S]*?)<\/explanation>/);
+    const diffMatch = response.content.match(/<diff>([\s\S]*?)<\/diff>/);
+    const contentMatch = response.content.match(/<content>([\s\S]*?)<\/content>/);
+
+    return c.json({
+      response: response.content,
+      explanation: explanationMatch ? explanationMatch[1].trim() : null,
+      diff: diffMatch ? diffMatch[1].trim() : null,
+      updatedContent: contentMatch ? contentMatch[1].trim() : null,
+      usage: response.usage,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: `Chat failed: ${message}` }, 500);
+  }
 });
 
 export default app;

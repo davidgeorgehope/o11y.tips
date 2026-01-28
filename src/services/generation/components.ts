@@ -12,27 +12,45 @@ interface ValidationResult {
   error?: string;
 }
 
+export interface ComponentSpec {
+  type: string;
+  purpose: string;
+  placement: string;
+  requirements: string[];
+}
+
+export interface ComponentGenerationResult {
+  success: boolean;
+  component?: GeneratedComponent;
+  spec: ComponentSpec;
+  error?: string;
+  attempts: number;
+}
+
+export interface ComponentGenerationOutput {
+  components: GeneratedComponent[];
+  status: ComponentGenerationResult[];
+}
+
 const MAX_COMPONENT_RETRIES = 3;
 
 export async function generateComponents(
   context: GenerationContext,
   outline: ContentOutline,
   content: GeneratedContent
-): Promise<GeneratedComponent[]> {
+): Promise<ComponentGenerationOutput> {
   logger.debug('Generating interactive components', {
     componentSpecs: outline.interactiveComponents.length,
   });
 
   const components: GeneratedComponent[] = [];
+  const status: ComponentGenerationResult[] = [];
 
   for (const spec of outline.interactiveComponents) {
-    try {
-      const component = await generateComponentWithRetry(context, spec, content);
-      if (component) {
-        components.push(component);
-      }
-    } catch (error) {
-      logger.error('Failed to generate component', { spec, error });
+    const result = await generateComponentWithRetry(context, spec, content);
+    status.push(result);
+    if (result.success && result.component) {
+      components.push(result.component);
     }
   }
 
@@ -53,6 +71,12 @@ export async function generateComponents(
           { title: content.title, description: content.description }
         );
         components[componentIndex] = fixedComponent;
+
+        // Update the status to reflect the fixed component
+        const statusIndex = status.findIndex(s => s.component?.id === issue.componentId);
+        if (statusIndex >= 0) {
+          status[statusIndex].component = fixedComponent;
+        }
       }
     }
 
@@ -61,44 +85,75 @@ export async function generateComponents(
     }
   }
 
-  logger.debug('Components generated', { count: components.length });
-  return components;
+  logger.debug('Components generated', {
+    count: components.length,
+    succeeded: status.filter(s => s.success).length,
+    failed: status.filter(s => !s.success).length,
+  });
+
+  return { components, status };
 }
 
-async function generateComponentWithRetry(
+export async function generateComponentWithRetry(
   context: GenerationContext,
   spec: ContentOutline['interactiveComponents'][0],
   content: GeneratedContent
-): Promise<GeneratedComponent | null> {
+): Promise<ComponentGenerationResult> {
   let lastError: string | null = null;
+  const componentSpec: ComponentSpec = {
+    type: spec.type,
+    purpose: spec.purpose,
+    placement: spec.placement,
+    requirements: spec.requirements,
+  };
 
   for (let attempt = 1; attempt <= MAX_COMPONENT_RETRIES; attempt++) {
-    const component = await generateComponent(context, spec, content, lastError);
-    if (!component) {
-      logger.warn(`Component generation returned null on attempt ${attempt}`, { type: spec.type });
-      continue;
-    }
+    try {
+      const component = await generateComponent(context, spec, content, lastError);
+      if (!component) {
+        lastError = 'Component generation returned null';
+        logger.warn("Component generation returned null on attempt " + attempt, { type: spec.type });
+        continue;
+      }
 
-    const validation = await validateComponent(component);
-    if (validation.valid) {
-      logger.info(`Component generated successfully on attempt ${attempt}`, { type: spec.type });
-      return component;
-    }
+      const validation = await validateComponent(component);
+      if (validation.valid) {
+        logger.info("Component generated successfully on attempt " + attempt, { type: spec.type });
+        return {
+          success: true,
+          component,
+          spec: componentSpec,
+          attempts: attempt,
+        };
+      }
 
-    lastError = validation.error || 'Unknown validation error';
-    logger.warn(`Component validation failed on attempt ${attempt}`, {
-      type: spec.type,
-      error: lastError,
-      attempt,
-      maxRetries: MAX_COMPONENT_RETRIES
-    });
+      lastError = validation.error || 'Unknown validation error';
+      logger.warn("Component validation failed on attempt " + attempt, {
+        type: spec.type,
+        error: lastError,
+        attempt,
+        maxRetries: MAX_COMPONENT_RETRIES
+      });
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : 'Unknown error';
+      logger.error("Component generation threw error on attempt " + attempt, {
+        type: spec.type,
+        error: lastError,
+      });
+    }
   }
 
-  logger.error(`Component generation failed after ${MAX_COMPONENT_RETRIES} attempts`, {
+  logger.error("Component generation failed after " + MAX_COMPONENT_RETRIES + " attempts", {
     type: spec.type,
     lastError
   });
-  return null;
+
+  return {
+    success: false,
+    spec: componentSpec,
+    error: lastError || 'Max retries exceeded',
+    attempts: MAX_COMPONENT_RETRIES,
+  };
 }
 
 async function generateComponent(
@@ -201,18 +256,27 @@ Output ONLY the component code wrapped in \`\`\`tsx code blocks.
 The component should be named ${generateComponentName(spec.type)}.`;
 
   if (previousError) {
-    prompt += `
+    // Make the error message more explicit about template literals
+    let errorExplanation = previousError;
+    if (previousError.includes('Unterminated string literal')) {
+      errorExplanation = 'BUILD FAILED: You used a template literal (backtick character \`) which is FORBIDDEN.\n\n' +
+        'Original error: ' + previousError + '\n\n' +
+        'The backtick character causes build failures. You MUST use string concatenation instead.\n\n' +
+        'FIND AND REPLACE all instances like:\n' +
+        '  \`text ${var}\`  -->  "text " + var\n' +
+        '  \`${a} ${b}\`    -->  a + " " + b\n' +
+        '  className={\`base ${x}\`}  -->  className={"base " + x}';
+    }
 
-PREVIOUS ATTEMPT FAILED with this error:
-${previousError}
-
-The most common cause is using template literals (backticks). Search your code for any \` character and replace with string concatenation using + and regular quotes.
-
-Fix checklist:
-1. Replace ALL template literals with string concatenation
-2. Check for missing imports
-3. Verify TypeScript types
-4. Ensure valid JSX structure`;
+    prompt += '\n\n' +
+      '⚠️ PREVIOUS ATTEMPT FAILED ⚠️\n' +
+      errorExplanation + '\n\n' +
+      'MANDATORY FIX CHECKLIST:\n' +
+      '1. Search your ENTIRE code for the backtick character (\`) - there should be ZERO\n' +
+      '2. Convert ALL template literals to string concatenation using + and double quotes\n' +
+      '3. Check for missing imports\n' +
+      '4. Verify TypeScript types\n' +
+      '5. Ensure valid JSX structure';
   }
 
   return prompt;
@@ -236,10 +300,18 @@ EXAMPLE STRUCTURE:
 
     diagram: `
 EXAMPLE STRUCTURE:
-- SVG or canvas visualization
-- Interactive hover states
-- Labels and annotations
-- Responsive sizing`,
+- SVG visualization with hardcoded paths/shapes
+- Interactive hover states using onMouseEnter/onMouseLeave
+- Text labels with fixed positions
+- Responsive sizing using viewBox
+
+CRITICAL - Example className pattern:
+  WRONG: className={\`p-4 \${isActive ? "bg-blue-500" : "bg-gray-500"}\`}
+  CORRECT: className={"p-4 " + (isActive ? "bg-blue-500" : "bg-gray-500")}
+
+For SVG text, use regular strings:
+  WRONG: <text>{\`Value: \${count}\`}</text>
+  CORRECT: <text>{"Value: " + count}</text>`,
 
     calculator: `
 EXAMPLE STRUCTURE:
@@ -250,10 +322,25 @@ EXAMPLE STRUCTURE:
 
     'comparison-table': `
 EXAMPLE STRUCTURE:
-- Feature comparison grid
-- Sortable/filterable
-- Highlighted recommendations
-- Expandable details`,
+- Feature comparison grid with hardcoded data array
+- Sortable columns using onClick handlers
+- Highlighted recommendations with conditional styling
+- Expandable rows using useState
+
+CRITICAL - Example patterns:
+  Data array (use regular objects, not template strings):
+    const data = [
+      { name: "Option A", feature1: true, feature2: false },
+      { name: "Option B", feature1: true, feature2: true }
+    ];
+
+  Conditional className:
+    WRONG: className={\`cell \${item.recommended ? "bg-green-100" : ""}\`}
+    CORRECT: className={"cell " + (item.recommended ? "bg-green-100" : "")}
+
+  Dynamic text:
+    WRONG: {\`\${item.name}: \${item.value}\`}
+    CORRECT: {item.name + ": " + item.value}`,
   };
 
   return examples[type] || '';
@@ -274,23 +361,128 @@ function generateComponentName(type: string): string {
 function extractCode(response: string): string | null {
   // Try to extract code from markdown code blocks
   const tsxMatch = response.match(/```tsx\n([\s\S]*?)```/);
-  if (tsxMatch) return tsxMatch[1].trim();
+  if (tsxMatch) return sanitizeTemplateLiterals(tsxMatch[1].trim());
 
   const tsMatch = response.match(/```typescript\n([\s\S]*?)```/);
-  if (tsMatch) return tsMatch[1].trim();
+  if (tsMatch) return sanitizeTemplateLiterals(tsMatch[1].trim());
 
   const jsxMatch = response.match(/```jsx\n([\s\S]*?)```/);
-  if (jsxMatch) return jsxMatch[1].trim();
+  if (jsxMatch) return sanitizeTemplateLiterals(jsxMatch[1].trim());
 
   const genericMatch = response.match(/```\n([\s\S]*?)```/);
-  if (genericMatch) return genericMatch[1].trim();
+  if (genericMatch) return sanitizeTemplateLiterals(genericMatch[1].trim());
 
   // If no code blocks, check if the whole response is code
   if (response.includes('export default') || response.includes('function ') || response.includes('const ')) {
-    return response.trim();
+    return sanitizeTemplateLiterals(response.trim());
   }
 
   return null;
+}
+
+/**
+ * Convert template literals to string concatenation.
+ * This fixes the most common LLM mistake causing "Unterminated string literal" errors.
+ */
+function sanitizeTemplateLiterals(code: string): string {
+  let sanitized = code;
+  let iterations = 0;
+  const maxIterations = 100; // Prevent infinite loops
+
+  // Keep processing until no more template literals are found
+  while (sanitized.includes('`') && iterations < maxIterations) {
+    iterations++;
+
+    // Match template literals with interpolations: `text ${expr} more`
+    // This regex captures the content between backticks
+    const templateMatch = sanitized.match(/`([^`]*?\$\{[^}]+\}[^`]*?)`/);
+
+    if (templateMatch) {
+      const fullMatch = templateMatch[0];
+      const content = templateMatch[1];
+
+      // Parse and convert the template literal
+      const converted = convertTemplateLiteral(content);
+      sanitized = sanitized.replace(fullMatch, converted);
+      continue;
+    }
+
+    // Match simple template literals without interpolation: `simple text`
+    const simpleMatch = sanitized.match(/`([^`$]*)`/);
+    if (simpleMatch) {
+      const fullMatch = simpleMatch[0];
+      const content = simpleMatch[1];
+      // Convert to regular string, escaping any quotes
+      const escaped = content.replace(/"/g, '\\"');
+      sanitized = sanitized.replace(fullMatch, '"' + escaped + '"');
+      continue;
+    }
+
+    // If we have backticks but couldn't match them, break to avoid infinite loop
+    break;
+  }
+
+  if (iterations > 0) {
+    logger.info('Sanitized template literals', { iterations, hadBackticks: code.includes('`'), hasBackticks: sanitized.includes('`') });
+  }
+
+  return sanitized;
+}
+
+/**
+ * Convert a template literal's content to string concatenation.
+ * Example: "Hello ${name}!" becomes "Hello " + name + "!"
+ */
+function convertTemplateLiteral(content: string): string {
+  const parts: string[] = [];
+  let remaining = content;
+
+  while (remaining.length > 0) {
+    const exprStart = remaining.indexOf('${');
+
+    if (exprStart === -1) {
+      // No more expressions, add remaining as string
+      if (remaining.length > 0) {
+        const escaped = remaining.replace(/"/g, '\\"');
+        parts.push('"' + escaped + '"');
+      }
+      break;
+    }
+
+    // Add text before expression
+    if (exprStart > 0) {
+      const textBefore = remaining.substring(0, exprStart);
+      const escaped = textBefore.replace(/"/g, '\\"');
+      parts.push('"' + escaped + '"');
+    }
+
+    // Find matching closing brace, handling nested braces
+    let braceCount = 1;
+    let i = exprStart + 2;
+    while (i < remaining.length && braceCount > 0) {
+      if (remaining[i] === '{') braceCount++;
+      if (remaining[i] === '}') braceCount--;
+      i++;
+    }
+
+    if (braceCount === 0) {
+      // Extract the expression (without ${ and })
+      const expr = remaining.substring(exprStart + 2, i - 1);
+      // Wrap in parentheses for safety
+      parts.push('(' + expr + ')');
+      remaining = remaining.substring(i);
+    } else {
+      // Malformed template, just escape and return
+      const escaped = remaining.replace(/"/g, '\\"');
+      parts.push('"' + escaped + '"');
+      break;
+    }
+  }
+
+  // Join parts with +
+  if (parts.length === 0) return '""';
+  if (parts.length === 1) return parts[0];
+  return parts.join(' + ');
 }
 
 async function validateComponent(component: GeneratedComponent): Promise<ValidationResult> {

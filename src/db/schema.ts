@@ -82,6 +82,7 @@ export const content = sqliteTable('content', {
   content: text('content').notNull(), // Markdown content
   components: text('components'), // JSON array of component definitions
   componentBundle: text('component_bundle'), // Bundled JS for interactive components
+  componentStatus: text('component_status'), // JSON array of component generation results
   seoScore: real('seo_score'),
   seoAnalysis: text('seo_analysis'), // JSON
   slopScore: real('slop_score'),

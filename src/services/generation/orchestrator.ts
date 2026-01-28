@@ -104,7 +104,9 @@ export async function runGenerationJob(jobId: string): Promise<void> {
 
     // Step 5: Components
     await updateJobStep(jobId, 'components', 70);
-    const components = await generateComponents(context, outline, generatedContent);
+    const componentResult = await generateComponents(context, outline, generatedContent);
+    const components = componentResult.components;
+    const componentStatus = componentResult.status;
     const componentBundle = await bundleComponents(components);
 
     // Step 6: Images
@@ -127,6 +129,7 @@ export async function runGenerationJob(jobId: string): Promise<void> {
       content: generatedContent.content,
       components: JSON.stringify(components),
       componentBundle,
+      componentStatus: JSON.stringify(componentStatus),
       status: 'review',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

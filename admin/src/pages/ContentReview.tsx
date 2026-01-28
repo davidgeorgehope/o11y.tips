@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { api, Content } from '../api/client';
+import { api, Content, ComponentGenerationResult } from '../api/client';
+import ContentChat from '../components/ContentChat';
+import ComponentStatusPanel from '../components/ComponentStatusPanel';
+
+type TabType = 'markdown' | 'preview' | 'components';
 
 export default function ContentReview() {
   const { id } = useParams<{ id: string }>();
@@ -11,6 +15,10 @@ export default function ContentReview() {
   const [error, setError] = useState('');
   const [editMode, setEditMode] = useState(false);
   const [editContent, setEditContent] = useState('');
+  const [activeTab, setActiveTab] = useState<TabType>('markdown');
+  const [previewHtml, setPreviewHtml] = useState<string>('');
+  const [componentStatus, setComponentStatus] = useState<ComponentGenerationResult[] | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [validation, setValidation] = useState<{
     isValid: boolean;
     seo: { passed: boolean; score: number };
@@ -24,15 +32,43 @@ export default function ContentReview() {
     }
   }, [id]);
 
+  useEffect(() => {
+    if (activeTab === 'preview' && id) {
+      loadPreview();
+    }
+  }, [activeTab, id]);
+
   const loadContent = async () => {
     try {
       const data = await api.getContentItem(id!);
       setContent(data);
       setEditContent(data.content);
+      // Parse component status from content if available
+      if (data.componentStatus) {
+        try {
+          setComponentStatus(JSON.parse(data.componentStatus));
+        } catch {
+          setComponentStatus(null);
+        }
+      }
     } catch (err) {
       setError('Failed to load content');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPreview = async () => {
+    if (!id) return;
+    setPreviewLoading(true);
+    try {
+      const preview = await api.getContentPreview(id);
+      setPreviewHtml(preview.html);
+      setComponentStatus(preview.componentStatus);
+    } catch (err) {
+      setError('Failed to load preview');
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
@@ -55,7 +91,7 @@ export default function ContentReview() {
     try {
       const result = await api.validateContent(content.id);
       setValidation(result);
-      loadContent(); // Reload to get updated scores
+      loadContent();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to validate');
     }
@@ -76,11 +112,24 @@ export default function ContentReview() {
     try {
       const result = await api.publishContent(content.id);
       if (result.url) {
-        alert(`Published at: ${result.url}`);
+        alert('Published at: ' + result.url);
       }
       navigate('/content');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to publish');
+    }
+  };
+
+  const handleApplyChanges = (newContent: string) => {
+    setEditContent(newContent);
+    setEditMode(true);
+    setActiveTab('markdown');
+  };
+
+  const handleComponentStatusChange = () => {
+    loadContent();
+    if (activeTab === 'preview') {
+      loadPreview();
     }
   };
 
@@ -137,47 +186,138 @@ export default function ContentReview() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Content Editor/Preview */}
+        {/* Content Editor/Preview with Tabs */}
         <div className="lg:col-span-2 bg-white rounded-lg shadow">
           <div className="border-b px-4 py-3 flex justify-between items-center">
-            <h2 className="font-semibold">Content</h2>
-            <button
-              onClick={() => setEditMode(!editMode)}
-              className="text-sm text-blue-600 hover:underline"
-            >
-              {editMode ? 'Preview' : 'Edit'}
-            </button>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setActiveTab('markdown')}
+                className={'px-3 py-1 text-sm rounded ' + (activeTab === 'markdown' ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-100')}
+              >
+                Markdown
+              </button>
+              <button
+                onClick={() => setActiveTab('preview')}
+                className={'px-3 py-1 text-sm rounded ' + (activeTab === 'preview' ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-100')}
+              >
+                Preview
+              </button>
+              <button
+                onClick={() => setActiveTab('components')}
+                className={'px-3 py-1 text-sm rounded ' + (activeTab === 'components' ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-100')}
+              >
+                Components
+                {componentStatus && componentStatus.filter(s => !s.success).length > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 bg-red-500 text-white text-xs rounded-full">
+                    {componentStatus.filter(s => !s.success).length}
+                  </span>
+                )}
+              </button>
+            </div>
+            {activeTab === 'markdown' && (
+              <button
+                onClick={() => setEditMode(!editMode)}
+                className="text-sm text-blue-600 hover:underline"
+              >
+                {editMode ? 'Preview' : 'Edit'}
+              </button>
+            )}
           </div>
           <div className="p-4">
-            {editMode ? (
+            {activeTab === 'markdown' && (
               <>
-                <textarea
-                  value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  className="w-full h-[600px] font-mono text-sm p-4 border border-gray-300 rounded-lg"
-                />
-                <div className="mt-4 flex gap-2">
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {saving ? 'Saving...' : 'Save Changes'}
-                  </button>
-                  <button
-                    onClick={() => { setEditContent(content.content); setEditMode(false); }}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                </div>
+                {editMode ? (
+                  <>
+                    <textarea
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      className="w-full h-[600px] font-mono text-sm p-4 border border-gray-300 rounded-lg"
+                    />
+                    <div className="mt-4 flex gap-2">
+                      <button
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {saving ? 'Saving...' : 'Save Changes'}
+                      </button>
+                      <button
+                        onClick={() => { setEditContent(content.content); setEditMode(false); }}
+                        className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="prose max-w-none">
+                    <pre className="whitespace-pre-wrap text-sm bg-gray-50 p-4 rounded-lg overflow-auto max-h-[600px]">
+                      {content.content}
+                    </pre>
+                  </div>
+                )}
               </>
-            ) : (
-              <div className="prose max-w-none">
-                <pre className="whitespace-pre-wrap text-sm bg-gray-50 p-4 rounded-lg overflow-auto max-h-[600px]">
-                  {content.content}
-                </pre>
+            )}
+
+            {activeTab === 'preview' && (
+              <div className="max-h-[600px] overflow-auto">
+                {previewLoading ? (
+                  <div className="flex items-center justify-center h-64">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  </div>
+                ) : (
+                  <>
+                    <style>{`
+                      .component-placeholder {
+                        border: 2px dashed;
+                        border-radius: 8px;
+                        padding: 16px;
+                        margin: 16px 0;
+                      }
+                      .component-success {
+                        border-color: #10b981;
+                        background-color: #ecfdf5;
+                      }
+                      .component-failed {
+                        border-color: #ef4444;
+                        background-color: #fef2f2;
+                      }
+                      .component-badge {
+                        display: inline-block;
+                        padding: 2px 8px;
+                        border-radius: 4px;
+                        font-size: 12px;
+                        font-weight: 600;
+                        margin-bottom: 8px;
+                      }
+                      .component-badge.success {
+                        background-color: #10b981;
+                        color: white;
+                      }
+                      .component-badge.failed {
+                        background-color: #ef4444;
+                        color: white;
+                      }
+                      .component-info {
+                        font-size: 14px;
+                        color: #6b7280;
+                      }
+                    `}</style>
+                    <div
+                      className="prose max-w-none"
+                      dangerouslySetInnerHTML={{ __html: previewHtml }}
+                    />
+                  </>
+                )}
               </div>
+            )}
+
+            {activeTab === 'components' && (
+              <ComponentStatusPanel
+                contentId={content.id}
+                componentStatus={componentStatus}
+                onStatusChange={handleComponentStatusChange}
+              />
             )}
           </div>
         </div>
@@ -227,8 +367,8 @@ export default function ContentReview() {
                 {content.seoScore !== undefined && content.seoScore !== null && (
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
-                      className={`h-2 rounded-full ${content.seoScore >= 70 ? 'bg-green-500' : 'bg-yellow-500'}`}
-                      style={{ width: `${content.seoScore}%` }}
+                      className={'h-2 rounded-full ' + (content.seoScore >= 70 ? 'bg-green-500' : 'bg-yellow-500')}
+                      style={{ width: content.seoScore + '%' }}
                     />
                   </div>
                 )}
@@ -243,8 +383,8 @@ export default function ContentReview() {
                 {content.slopScore !== undefined && content.slopScore !== null && (
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
-                      className={`h-2 rounded-full ${content.slopScore <= 5 ? 'bg-green-500' : 'bg-yellow-500'}`}
-                      style={{ width: `${Math.min(100, content.slopScore * 10)}%` }}
+                      className={'h-2 rounded-full ' + (content.slopScore <= 5 ? 'bg-green-500' : 'bg-yellow-500')}
+                      style={{ width: Math.min(100, content.slopScore * 10) + '%' }}
                     />
                   </div>
                 )}
@@ -256,7 +396,7 @@ export default function ContentReview() {
           {validation && (
             <div className="bg-white rounded-lg shadow p-4">
               <h3 className="font-semibold mb-3">Validation Results</h3>
-              <div className={`px-3 py-2 rounded mb-3 ${validation.isValid ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
+              <div className={'px-3 py-2 rounded mb-3 ' + (validation.isValid ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700')}>
                 {validation.isValid ? 'Content is ready for publishing' : 'Content needs improvements'}
               </div>
               {validation.suggestions.length > 0 && (
@@ -277,10 +417,20 @@ export default function ContentReview() {
             <div className="bg-white rounded-lg shadow p-4">
               <h3 className="font-semibold mb-3">SEO Analysis</h3>
               <pre className="text-xs bg-gray-50 p-2 rounded overflow-x-auto max-h-48">
-                {JSON.stringify(JSON.parse(content.seoAnalysis), null, 2)}
+                {typeof content.seoAnalysis === 'string'
+                  ? JSON.stringify(JSON.parse(content.seoAnalysis), null, 2)
+                  : JSON.stringify(content.seoAnalysis, null, 2)}
               </pre>
             </div>
           )}
+
+          {/* AI Chat */}
+          <ContentChat
+            contentId={content.id}
+            currentContent={editContent}
+            onApplyChanges={handleApplyChanges}
+            componentStatus={componentStatus}
+          />
         </div>
       </div>
     </div>
