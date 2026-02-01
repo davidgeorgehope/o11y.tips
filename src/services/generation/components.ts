@@ -165,7 +165,7 @@ async function generateComponent(
   const prompt = buildComponentPrompt(spec, content, context, previousError);
 
   const response = await generateWithClaude(prompt, {
-    maxTokens: 4096,
+    maxTokens: 8192,
     temperature: 0.3,
     systemPrompt: `You are an expert React developer creating interactive educational components.
 Write clean, well-structured TypeScript React components that work standalone.
@@ -185,6 +185,14 @@ CRITICAL - STRING SYNTAX RULES (violations will break the build):
 - For dynamic strings, use: "Hello " + name + "!"
 - This applies to ALL strings, not just className`,
   });
+
+  // Check for truncation
+  if (response.stopReason === 'max_tokens') {
+    logger.warn('Component generation truncated by max_tokens', {
+      type: spec.type,
+      outputLength: response.content.length,
+    });
+  }
 
   // Extract the code from the response
   const code = extractCode(response.content);
@@ -360,20 +368,54 @@ function generateComponentName(type: string): string {
 
 function extractCode(response: string): string | null {
   // Try to extract code from markdown code blocks
-  const tsxMatch = response.match(/```tsx\n([\s\S]*?)```/);
-  if (tsxMatch) return sanitizeTemplateLiterals(tsxMatch[1].trim());
+  // Handle \r\n line endings and optional space after language tag
+  // Use both greedy (with closing fence) and fallback (without closing fence) patterns
 
-  const tsMatch = response.match(/```typescript\n([\s\S]*?)```/);
-  if (tsMatch) return sanitizeTemplateLiterals(tsMatch[1].trim());
+  // First try with proper closing fence
+  const tsxMatch = response.match(/```tsx\s*\r?\n([\s\S]*?)```/);
+  if (tsxMatch) {
+    logger.debug('Code extracted via tsx regex');
+    return sanitizeTemplateLiterals(tsxMatch[1].trim());
+  }
 
-  const jsxMatch = response.match(/```jsx\n([\s\S]*?)```/);
-  if (jsxMatch) return sanitizeTemplateLiterals(jsxMatch[1].trim());
+  const tsMatch = response.match(/```typescript\s*\r?\n([\s\S]*?)```/);
+  if (tsMatch) {
+    logger.debug('Code extracted via typescript regex');
+    return sanitizeTemplateLiterals(tsMatch[1].trim());
+  }
 
-  const genericMatch = response.match(/```\n([\s\S]*?)```/);
-  if (genericMatch) return sanitizeTemplateLiterals(genericMatch[1].trim());
+  const jsxMatch = response.match(/```jsx\s*\r?\n([\s\S]*?)```/);
+  if (jsxMatch) {
+    logger.debug('Code extracted via jsx regex');
+    return sanitizeTemplateLiterals(jsxMatch[1].trim());
+  }
+
+  const genericMatch = response.match(/```\r?\n([\s\S]*?)```/);
+  if (genericMatch) {
+    const extracted = genericMatch[1].trim();
+    const firstLine = extracted.split('\n')[0].trim().toLowerCase();
+    if (firstLine === 'tsx' || firstLine === 'typescript' || firstLine === 'jsx' || firstLine === 'javascript') {
+      logger.debug('Code extracted via generic regex, stripping language tag: ' + firstLine);
+      return sanitizeTemplateLiterals(extracted.substring(extracted.indexOf('\n') + 1).trim());
+    }
+    logger.debug('Code extracted via generic regex');
+    return sanitizeTemplateLiterals(extracted);
+  }
+
+  // Fallback: code block opened but never closed (LLM output truncated or omitted closing fence)
+  const unclosedMatch = response.match(/```(?:tsx|typescript|jsx|javascript)?\s*\r?\n([\s\S]+)/);
+  if (unclosedMatch) {
+    let extracted = unclosedMatch[1].trim();
+    // Strip any trailing ``` that might be partial
+    if (extracted.endsWith('``')) extracted = extracted.slice(0, -2).trim();
+    else if (extracted.endsWith('`')) extracted = extracted.slice(0, -1).trim();
+    logger.info('Code extracted via unclosed code block fallback (LLM may have been truncated)', { codeLength: extracted.length });
+    return sanitizeTemplateLiterals(extracted);
+  }
 
   // If no code blocks, check if the whole response is code
   if (response.includes('export default') || response.includes('function ') || response.includes('const ')) {
+    logger.debug('Code extracted as raw response (no code blocks found)');
     return sanitizeTemplateLiterals(response.trim());
   }
 
@@ -381,108 +423,199 @@ function extractCode(response: string): string | null {
 }
 
 /**
- * Convert template literals to string concatenation.
- * This fixes the most common LLM mistake causing "Unterminated string literal" errors.
+ * Convert template literals to string concatenation using a character-by-character parser.
+ * This fixes LLM-generated code that uses backticks, which esbuild rejects as
+ * "Unterminated string literal" when processed without module support.
+ *
+ * Handles: nested template literals, ${} expressions with nested braces,
+ * dollar signs without braces, and strings/comments containing backticks.
  */
 function sanitizeTemplateLiterals(code: string): string {
-  let sanitized = code;
-  let iterations = 0;
-  const maxIterations = 100; // Prevent infinite loops
+  if (!code.includes('`')) return code;
 
-  // Keep processing until no more template literals are found
-  while (sanitized.includes('`') && iterations < maxIterations) {
-    iterations++;
+  const result: string[] = [];
+  let i = 0;
 
-    // Match template literals with interpolations: `text ${expr} more`
-    // This regex captures the content between backticks
-    const templateMatch = sanitized.match(/`([^`]*?\$\{[^}]+\}[^`]*?)`/);
-
-    if (templateMatch) {
-      const fullMatch = templateMatch[0];
-      const content = templateMatch[1];
-
-      // Parse and convert the template literal
-      const converted = convertTemplateLiteral(content);
-      sanitized = sanitized.replace(fullMatch, converted);
+  while (i < code.length) {
+    // Skip single-quoted strings
+    if (code[i] === "'") {
+      const end = skipString(code, i, "'");
+      result.push(code.substring(i, end));
+      i = end;
       continue;
     }
 
-    // Match simple template literals without interpolation: `simple text`
-    const simpleMatch = sanitized.match(/`([^`$]*)`/);
-    if (simpleMatch) {
-      const fullMatch = simpleMatch[0];
-      const content = simpleMatch[1];
-      // Convert to regular string, escaping any quotes
-      const escaped = content.replace(/"/g, '\\"');
-      sanitized = sanitized.replace(fullMatch, '"' + escaped + '"');
+    // Skip double-quoted strings
+    if (code[i] === '"') {
+      const end = skipString(code, i, '"');
+      result.push(code.substring(i, end));
+      i = end;
       continue;
     }
 
-    // If we have backticks but couldn't match them, break to avoid infinite loop
-    break;
+    // Skip single-line comments
+    if (code[i] === '/' && code[i + 1] === '/') {
+      const newline = code.indexOf('\n', i);
+      const end = newline === -1 ? code.length : newline + 1;
+      result.push(code.substring(i, end));
+      i = end;
+      continue;
+    }
+
+    // Skip block comments
+    if (code[i] === '/' && code[i + 1] === '*') {
+      const end = code.indexOf('*/', i + 2);
+      const commentEnd = end === -1 ? code.length : end + 2;
+      result.push(code.substring(i, commentEnd));
+      i = commentEnd;
+      continue;
+    }
+
+    // Template literal found — parse and convert it
+    if (code[i] === '`') {
+      const converted = parseTemplateLiteral(code, i + 1);
+      result.push(converted.replacement);
+      i = converted.endIndex;
+      continue;
+    }
+
+    // Regular character
+    result.push(code[i]);
+    i++;
   }
 
-  if (iterations > 0) {
-    logger.info('Sanitized template literals', { iterations, hadBackticks: code.includes('`'), hasBackticks: sanitized.includes('`') });
+  const sanitized = result.join('');
+  if (code !== sanitized) {
+    logger.info('Sanitized template literals', {
+      hadBackticks: true,
+      hasBackticks: sanitized.includes('`'),
+    });
   }
-
   return sanitized;
 }
 
+/** Skip past a string literal (single or double quoted), handling escape sequences. */
+function skipString(code: string, start: number, quote: string): number {
+  let i = start + 1;
+  while (i < code.length) {
+    if (code[i] === '\\') {
+      i += 2; // skip escaped character
+      continue;
+    }
+    if (code[i] === quote) {
+      return i + 1;
+    }
+    i++;
+  }
+  return code.length; // unterminated string, consume to end
+}
+
 /**
- * Convert a template literal's content to string concatenation.
- * Example: "Hello ${name}!" becomes "Hello " + name + "!"
+ * Parse a template literal starting after the opening backtick.
+ * Returns the string-concatenation replacement and the index after the closing backtick.
+ * Recursively handles nested template literals inside ${} expressions.
  */
-function convertTemplateLiteral(content: string): string {
+function parseTemplateLiteral(code: string, start: number): { replacement: string; endIndex: number } {
   const parts: string[] = [];
-  let remaining = content;
+  let textBuf = '';
+  let i = start;
 
-  while (remaining.length > 0) {
-    const exprStart = remaining.indexOf('${');
-
-    if (exprStart === -1) {
-      // No more expressions, add remaining as string
-      if (remaining.length > 0) {
-        const escaped = remaining.replace(/"/g, '\\"');
-        parts.push('"' + escaped + '"');
+  while (i < code.length) {
+    // Closing backtick — end of this template literal
+    if (code[i] === '`') {
+      if (textBuf.length > 0) {
+        parts.push('"' + textBuf.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r') + '"');
       }
-      break;
+      const replacement = parts.length === 0 ? '""' : parts.length === 1 ? parts[0] : parts.join(' + ');
+      return { replacement, endIndex: i + 1 };
     }
 
-    // Add text before expression
-    if (exprStart > 0) {
-      const textBefore = remaining.substring(0, exprStart);
-      const escaped = textBefore.replace(/"/g, '\\"');
-      parts.push('"' + escaped + '"');
+    // Escape sequence inside template literal
+    if (code[i] === '\\') {
+      // Preserve common escapes as their literal characters
+      if (i + 1 < code.length) {
+        const next = code[i + 1];
+        if (next === 'n') { textBuf += '\n'; }
+        else if (next === 'r') { textBuf += '\r'; }
+        else if (next === 't') { textBuf += '\t'; }
+        else if (next === '\\') { textBuf += '\\'; }
+        else if (next === '`') { textBuf += '`'; }
+        else if (next === '$') { textBuf += '$'; }
+        else { textBuf += code[i + 1]; }
+        i += 2;
+        continue;
+      }
     }
 
-    // Find matching closing brace, handling nested braces
-    let braceCount = 1;
-    let i = exprStart + 2;
-    while (i < remaining.length && braceCount > 0) {
-      if (remaining[i] === '{') braceCount++;
-      if (remaining[i] === '}') braceCount--;
-      i++;
+    // Interpolation expression: ${...}
+    if (code[i] === '$' && code[i + 1] === '{') {
+      // Flush text buffer
+      if (textBuf.length > 0) {
+        parts.push('"' + textBuf.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r') + '"');
+        textBuf = '';
+      }
+
+      // Parse the expression inside ${}, handling nested braces and template literals
+      const expr = parseInterpolationExpr(code, i + 2);
+      parts.push('(' + expr.content + ')');
+      i = expr.endIndex;
+      continue;
     }
 
-    if (braceCount === 0) {
-      // Extract the expression (without ${ and })
-      const expr = remaining.substring(exprStart + 2, i - 1);
-      // Wrap in parentheses for safety
-      parts.push('(' + expr + ')');
-      remaining = remaining.substring(i);
-    } else {
-      // Malformed template, just escape and return
-      const escaped = remaining.replace(/"/g, '\\"');
-      parts.push('"' + escaped + '"');
-      break;
-    }
+    // Regular character
+    textBuf += code[i];
+    i++;
   }
 
-  // Join parts with +
-  if (parts.length === 0) return '""';
-  if (parts.length === 1) return parts[0];
-  return parts.join(' + ');
+  // Unterminated template literal — best-effort: flush what we have
+  if (textBuf.length > 0) {
+    parts.push('"' + textBuf.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r') + '"');
+  }
+  const replacement = parts.length === 0 ? '""' : parts.length === 1 ? parts[0] : parts.join(' + ');
+  return { replacement, endIndex: code.length };
+}
+
+/**
+ * Parse the expression inside a ${} interpolation, starting after the `{`.
+ * Handles nested braces, nested template literals, and string literals.
+ * Returns the raw expression content and the index after the closing `}`.
+ */
+function parseInterpolationExpr(code: string, start: number): { content: string; endIndex: number } {
+  let depth = 1;
+  let i = start;
+  const exprParts: string[] = [];
+
+  while (i < code.length && depth > 0) {
+    // Nested template literal inside expression — recursively convert it
+    if (code[i] === '`') {
+      const nested = parseTemplateLiteral(code, i + 1);
+      exprParts.push(nested.replacement);
+      i = nested.endIndex;
+      continue;
+    }
+
+    // Skip string literals inside expression
+    if (code[i] === "'" || code[i] === '"') {
+      const end = skipString(code, i, code[i]);
+      exprParts.push(code.substring(i, end));
+      i = end;
+      continue;
+    }
+
+    if (code[i] === '{') depth++;
+    if (code[i] === '}') {
+      depth--;
+      if (depth === 0) {
+        return { content: exprParts.join(''), endIndex: i + 1 };
+      }
+    }
+
+    exprParts.push(code[i]);
+    i++;
+  }
+
+  // Unterminated expression — return what we have
+  return { content: exprParts.join(''), endIndex: code.length };
 }
 
 async function validateComponent(component: GeneratedComponent): Promise<ValidationResult> {

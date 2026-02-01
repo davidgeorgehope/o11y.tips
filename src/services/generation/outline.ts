@@ -116,6 +116,15 @@ REQUIREMENTS:
 5. Address the frustration points directly
 6. Target 1500-2500 words total
 
+CRITICAL - SINGLE TOPIC FOCUS:
+- The source material may contain MULTIPLE pain points or topics. You MUST pick exactly ONE specific topic and focus the entire article on it.
+- Do NOT combine multiple topics into one article (e.g., "How to Solve X AND Y" is BAD)
+- Pick the most interesting, specific, and actionable topic from the source material
+- The title should be about ONE clear concept, problem, or solution
+- Example BAD: "How to Solve Cardinality Explosions and Context Propagation Issues"
+- Example GOOD: "How to Prevent OpenTelemetry Cardinality Explosions"
+- If the source mentions 5 problems, pick the best one. The others can become separate articles later.
+
 GEO/AEO OPTIMIZATION (CRITICAL):
 - FIRST section MUST be "Key Takeaways" (type: "summary") with 3-5 key points
 - Section headings should be QUESTIONS: "What is X?", "How do you Y?", "Why does Z matter?"

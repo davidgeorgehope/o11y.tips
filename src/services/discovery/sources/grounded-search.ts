@@ -114,7 +114,7 @@ interface ExtractedItem {
 
 function parseGroundedResponse(content: string, sources: Array<{ url: string; title: string }>): ExtractedItem[] {
   const items: ExtractedItem[] = [];
-  const discoveryRegex = /DISCOVERY \d+:\s*Title:\s*(.+?)\s*URL:\s*(.+?)\s*Author:\s*(.+?)\s*Content:\s*([\s\S]+?)(?=DISCOVERY \d+:|$)/gi;
+  const discoveryRegex = /(?:###?\s*)?DISCOVERY\s+\d+:\s*\*{0,2}Title:\*{0,2}\s*"?(.+?)"?\s*\*{0,2}URL:\*{0,2}\s*"?(.+?)"?\s*\*{0,2}Author:\*{0,2}\s*"?(.+?)"?\s*\*{0,2}Content:\*{0,2}\s*([\s\S]+?)(?=(?:###?\s*)?DISCOVERY\s+\d+:|$)/gi;
 
   let match;
   while ((match = discoveryRegex.exec(content)) !== null) {

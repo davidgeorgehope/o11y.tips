@@ -28,11 +28,14 @@ async function main() {
   app.use('/output/*', serveStatic({ root: './' }));
 
   // Serve admin UI (if built)
-  app.use('/admin/*', serveStatic({ root: './admin/dist', rewriteRequestPath: (path) => path.replace('/admin', '') }));
+  // Redirect /admin to /admin/ for consistency
   app.get('/admin', (c) => c.redirect('/admin/'));
 
-  // SPA fallback for admin routes - serve index.html for any unmatched /admin/* paths
-  // This allows React Router to handle client-side routing
+  // Serve static files for admin (JS, CSS, images, etc.) - must come first
+  app.use('/admin/*', serveStatic({ root: './admin/dist', rewriteRequestPath: (path) => path.replace('/admin', '') }));
+
+  // SPA fallback for admin routes - serve index.html for client-side routing
+  // This handles deep links like /admin/content/:id that don't match static files
   app.get('/admin/*', async (c) => {
     const indexPath = './admin/dist/index.html';
     if (existsSync(indexPath)) {

@@ -88,6 +88,7 @@ STYLE REQUIREMENTS:
 - Interactive elements should have subtle backgrounds (#f0f9ff) and borders to stand out
 - Hover/focus states for all interactive elements
 - Dark code blocks with syntax-friendly colors
+- CRITICAL: Code blocks MUST have "white-space: pre-wrap" to preserve line breaks and indentation
 
 PAGE STRUCTURE:
 - Navigation header with site name "o11y.tips" and link to /${input.niche.slug}
