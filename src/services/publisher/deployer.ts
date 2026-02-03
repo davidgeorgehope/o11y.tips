@@ -32,7 +32,7 @@ export async function publishContent(contentId: string): Promise<BuildResult> {
     throw new Error(`Content not found: ${contentId}`);
   }
 
-  if (article.status !== 'approved' && article.status !== 'review') {
+  if (article.status !== 'approved' && article.status !== 'review' && article.status !== 'archived') {
     throw new Error(`Content is not ready for publishing: ${article.status}`);
   }
 

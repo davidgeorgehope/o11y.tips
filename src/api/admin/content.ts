@@ -2,8 +2,13 @@ import { Hono } from 'hono';
 import { db, content, niches, images, generationJobs } from '../../db/index.js';
 import { eq, desc, and, like, or } from 'drizzle-orm';
 import { publishContent, unpublishContent, publishAsInteractive } from '../../services/publisher/deployer.js';
+import { buildArticle } from '../../services/publisher/builder.js';
+import { generateIndexPage, generateNicheIndexPage } from '../../services/publisher/index-generator.js';
 import { validateContent } from '../../services/quality/validator.js';
 import { generateWithClaude } from '../../services/ai/clients.js';
+import { createLogger } from '../../utils/logger.js';
+
+const logger = createLogger('api:admin:content');
 import { generateComponentWithRetry, bundleComponents, type ComponentGenerationResult } from '../../services/generation/components.js';
 import { marked } from 'marked';
 import type { GenerationContext, GeneratedContent, ContentOutline } from '../../services/generation/types.js';
@@ -125,6 +130,22 @@ app.put('/:id', async (c) => {
   const updated = await db.query.content.findFirst({
     where: eq(content.id, id),
   });
+
+  // If article is already published, rebuild the static HTML so the live site updates
+  if (existing.status === 'published') {
+    try {
+      await buildArticle(id);
+      // Regenerate index pages in case title/description changed
+      await generateNicheIndexPage(existing.nicheId);
+      await generateIndexPage();
+      logger.info('Rebuilt published article after save', { id, title: existing.title });
+    } catch (err) {
+      logger.error('Failed to rebuild published article after save', {
+        id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 
   return c.json(updated);
 });
