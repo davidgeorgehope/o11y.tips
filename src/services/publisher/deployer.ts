@@ -1,6 +1,6 @@
 import { db, content, niches, images } from '../../db/index.js';
 import { eq } from 'drizzle-orm';
-import { mkdir, writeFile, copyFile } from 'fs/promises';
+import { mkdir, writeFile, copyFile, unlink } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { createLogger } from '../../utils/logger.js';
@@ -302,6 +302,19 @@ export async function publishAllApproved(): Promise<DeployResult> {
 export async function unpublishContent(contentId: string): Promise<void> {
   logger.info('Unpublishing content', { contentId });
 
+  // Get content and niche info before updating status
+  const article = await db.query.content.findFirst({
+    where: eq(content.id, contentId),
+  });
+
+  if (!article) {
+    throw new Error(`Content not found: ${contentId}`);
+  }
+
+  const niche = await db.query.niches.findFirst({
+    where: eq(niches.id, article.nicheId),
+  });
+
   await db.update(content)
     .set({
       status: 'archived',
@@ -309,8 +322,21 @@ export async function unpublishContent(contentId: string): Promise<void> {
     })
     .where(eq(content.id, contentId));
 
-  // Regenerate sitemap
+  // Remove the static HTML file so the article is no longer publicly accessible
+  if (niche) {
+    const outputPath = join(config.paths.output, niche.slug, `${article.slug}.html`);
+    if (existsSync(outputPath)) {
+      await unlink(outputPath);
+      logger.info('Removed static HTML file', { outputPath });
+    }
+  }
+
+  // Regenerate sitemap and index pages so the article is removed from listings
   await generateSitemap();
+  await generateIndexPage();
+  if (niche) {
+    await generateNicheIndexPage(niche.id);
+  }
 
   logger.info('Content unpublished', { contentId });
 }

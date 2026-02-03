@@ -89,6 +89,7 @@ STYLE REQUIREMENTS:
 - Hover/focus states for all interactive elements
 - Dark code blocks with syntax-friendly colors
 - CRITICAL: Code blocks MUST have "white-space: pre-wrap" to preserve line breaks and indentation
+- CRITICAL: Never use negative margins on elements inside overflow containers (e.g. comparison table headers). Negative margins cause content to be clipped and text to be cut off. Use padding adjustments on parent containers instead.
 
 PAGE STRUCTURE:
 - Navigation header with site name "o11y.tips" and link to /${input.niche.slug}
