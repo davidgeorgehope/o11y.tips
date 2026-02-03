@@ -110,6 +110,21 @@
       border-radius: 0.75rem;
       border: 1px solid #bae6fd;
     }
+
+    /* Safety net: ensure text inside interactive components is never invisible.
+       LLM-generated components sometimes use text-white without a dark background,
+       causing invisible headings/text on the light page background. */
+    .component-mount th,
+    .component-mount thead td,
+    [data-component-type] th,
+    [data-component-type] thead td {
+      color: inherit;
+    }
+    /* Only allow white text when an explicit dark background is set on the element itself */
+    .component-mount .text-white:not([class*="bg-"]),
+    [data-component-type] .text-white:not([class*="bg-"]) {
+      color: #1f2937 !important;
+    }
   </style>
 </head>
 <body class="bg-gray-50 text-gray-900 antialiased">

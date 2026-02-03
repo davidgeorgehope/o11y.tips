@@ -183,7 +183,16 @@ CRITICAL - STRING SYNTAX RULES (violations will break the build):
 - For className with conditions, use string concatenation: "base " + (condition ? "a" : "b")
 - For multi-line strings, use regular quotes with + concatenation
 - For dynamic strings, use: "Hello " + name + "!"
-- This applies to ALL strings, not just className`,
+- This applies to ALL strings, not just className
+
+CRITICAL - COLOR CONTRAST RULES (violations cause invisible text):
+- The page has a light/white background. NEVER use text-white or light text colors without a dark bg- class ON THE SAME ELEMENT.
+- For table headers (th): use dark text (text-gray-700, text-gray-900) with a light background (bg-gray-50, bg-gray-100, bg-sky-50). NEVER use text-white on table headers.
+- For table cells (td): use text-gray-700 or text-gray-900. NEVER use text-white.
+- Always verify that every text element has sufficient contrast against its background.
+- WRONG: className="text-white font-semibold" (white text on light page = invisible!)
+- CORRECT: className="bg-sky-700 text-white font-semibold" (white text on dark bg = visible)
+- SAFEST for tables: className="bg-gray-100 text-gray-900 font-semibold"`,
   });
 
   // Check for truncation
@@ -255,6 +264,12 @@ CORRECT (use this):
   const msg = "Hello " + name;
 
 This rule applies to ALL strings in your entire component, not just className.
+
+COLOR CONTRAST - MANDATORY:
+- The page background is light (white/gray). All text must be dark enough to read.
+- For table headers: use dark text (text-gray-900) with a light tinted background (bg-gray-100 or bg-sky-50). NEVER use text-white on table headers.
+- For table cells: use text-gray-700 or text-gray-900. NEVER use text-white or text-gray-100.
+- Only use text-white when the SAME element has a dark background class (e.g., bg-sky-700, bg-gray-800).
 
 Other rules:
 - All imports must be at the top (React, useState, useEffect, etc.)
@@ -334,6 +349,13 @@ EXAMPLE STRUCTURE:
 - Sortable columns using onClick handlers
 - Highlighted recommendations with conditional styling
 - Expandable rows using useState
+
+CRITICAL - Table header styling:
+  Table headers MUST use dark text on a light background. The page background is white/light gray.
+  WRONG: <th className="text-white font-semibold">  (invisible white text on light bg!)
+  WRONG: <th className="bg-sky-600 text-white">  (risky - if bg fails to load, text disappears)
+  CORRECT: <th className="bg-gray-100 text-gray-900 font-semibold px-4 py-3 text-left">
+  CORRECT: <th className="bg-sky-50 text-sky-900 font-semibold px-4 py-3 text-left">
 
 CRITICAL - Example patterns:
   Data array (use regular objects, not template strings):
