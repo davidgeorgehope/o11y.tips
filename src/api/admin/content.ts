@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { db, content, niches, images, generationJobs } from '../../db/index.js';
 import { eq, desc, and, like, or } from 'drizzle-orm';
+import { generateId, slugify } from '../../utils/hash.js';
 import { publishContent, unpublishContent, publishAsInteractive } from '../../services/publisher/deployer.js';
 import { buildArticle } from '../../services/publisher/builder.js';
 import { generateIndexPage, generateNicheIndexPage } from '../../services/publisher/index-generator.js';
@@ -66,6 +67,55 @@ app.get('/', async (c) => {
       hasMore: offset + articles.length < allContent.length,
     },
   });
+});
+
+// Create new content manually
+app.post('/', async (c) => {
+  const body = await c.req.json();
+  const { nicheId, title, slug: rawSlug, description, content: markdownContent } = body;
+
+  if (!nicheId || !title || !markdownContent) {
+    return c.json({ error: 'nicheId, title, and content are required' }, 400);
+  }
+
+  // Verify niche exists
+  const niche = await db.query.niches.findFirst({
+    where: eq(niches.id, nicheId),
+  });
+  if (!niche) {
+    return c.json({ error: 'Niche not found' }, 404);
+  }
+
+  const slug = rawSlug ? slugify(rawSlug) : slugify(title);
+
+  // Check slug uniqueness within niche
+  const existing = await db.query.content.findFirst({
+    where: and(eq(content.nicheId, nicheId), eq(content.slug, slug)),
+  });
+  if (existing) {
+    return c.json({ error: `Slug "${slug}" already exists in this niche` }, 409);
+  }
+
+  const id = generateId();
+  const now = new Date().toISOString();
+
+  await db.insert(content).values({
+    id,
+    nicheId,
+    slug,
+    title,
+    description: description || null,
+    content: markdownContent,
+    status: 'draft',
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const created = await db.query.content.findFirst({
+    where: eq(content.id, id),
+  });
+
+  return c.json(created, 201);
 });
 
 // Get single content item with full details

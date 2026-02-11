@@ -264,6 +264,13 @@ class ApiClient {
     return this.request<Content>(`/content/${id}`);
   }
 
+  async createContent(data: { nicheId: string; title: string; slug?: string; description?: string; content: string }) {
+    return this.request<Content>('/content', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   async updateContent(id: string, data: Partial<Content>) {
     return this.request<Content>(`/content/${id}`, {
       method: 'PUT',

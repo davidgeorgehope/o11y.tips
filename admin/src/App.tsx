@@ -9,6 +9,7 @@ import Discovery from './pages/Discovery';
 import Jobs from './pages/Jobs';
 import ContentList from './pages/ContentList';
 import ContentReview from './pages/ContentReview';
+import CreateContent from './pages/CreateContent';
 import Settings from './pages/Settings';
 import { api } from './api/client';
 
@@ -51,6 +52,7 @@ function App() {
         <Route path="/niches/:id" element={<NicheDetail />} />
         <Route path="/discovery" element={<Discovery />} />
         <Route path="/jobs" element={<Jobs />} />
+        <Route path="/create" element={<CreateContent />} />
         <Route path="/content" element={<ContentList />} />
         <Route path="/content/:id" element={<ContentReview />} />
         <Route path="/settings" element={<Settings />} />

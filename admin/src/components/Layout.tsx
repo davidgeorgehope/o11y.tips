@@ -12,6 +12,7 @@ const navItems = [
   { path: '/discovery', label: 'Discovery', icon: '🔍' },
   { path: '/jobs', label: 'Jobs', icon: '⚙️' },
   { path: '/content', label: 'Content', icon: '📝' },
+  { path: '/create', label: 'Create', icon: '✏️' },
   { path: '/settings', label: 'Settings', icon: '⚡' },
 ];
 
