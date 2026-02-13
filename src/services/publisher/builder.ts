@@ -48,16 +48,19 @@ export async function buildArticle(contentId: string): Promise<BuildResult> {
   // Parse markdown to HTML
   const htmlContent = await marked.parse(article.content);
 
-  // Build component script (React CDN + bundle + mounting) if needed
-  let componentScript = '';
-  if (article.components && article.componentBundle) {
-    // Parse components to get types for mounting script
-    let parsedComponents: Array<{ type: string; name: string }> = [];
+  // Parse components metadata (needed for both mounting script and type reconciliation)
+  let parsedComponents: Array<{ type: string; name: string }> = [];
+  if (article.components) {
     try {
       parsedComponents = JSON.parse(article.components as string);
     } catch {
       logger.warn('Failed to parse components JSON', { contentId });
     }
+  }
+
+  // Build component script (React CDN + bundle + mounting) if needed
+  let componentScript = '';
+  if (parsedComponents.length > 0 && article.componentBundle) {
 
     // Generate mounting script for these components
     const mountingScript = generateMountingScriptForArticle(parsedComponents);
@@ -100,11 +103,41 @@ ${mountingScript}
   const heroImagePath = heroImage ? `/output/images/${niche.slug}/${heroImage.filename}` : '';
   const heroImageOg = heroImage ? `${config.output.publicUrl}/output/images/${niche.slug}/${heroImage.filename}` : '';
 
-  // Replace component placeholders with mountable divs
-  const contentWithMounts = htmlContent.replace(
+  // Replace component placeholders with mountable divs, reconciling types with actual components
+  let contentWithMounts = htmlContent.replace(
     /\{\{COMPONENT:([^:]+):([^}]+)\}\}/g,
     '<div class="component-mount my-8 p-4 bg-gray-50 rounded-lg border border-gray-200" data-component-type="$1" data-component-id="$2"></div>'
   );
+
+  // Reconcile mount point types with actual component types
+  // The content LLM may use different type names than the outline's interactiveComponents
+  if (parsedComponents.length > 0) {
+    const mountTypeRegex = /data-component-type="([^"]+)"/g;
+    const mountTypes = new Set<string>();
+    let m;
+    while ((m = mountTypeRegex.exec(contentWithMounts)) !== null) {
+      mountTypes.add(m[1]);
+    }
+    const componentTypes = new Set(parsedComponents.map(c => c.type));
+
+    // Find unmatched mount points and unmatched components
+    const unmatchedMounts = [...mountTypes].filter(t => !componentTypes.has(t));
+    const unmatchedComponents = [...componentTypes].filter(t => !mountTypes.has(t));
+
+    // If we have equal unmatched on both sides, remap mount points to component types
+    if (unmatchedMounts.length > 0 && unmatchedMounts.length === unmatchedComponents.length) {
+      logger.info('Reconciling component type mismatches', {
+        unmatchedMounts,
+        unmatchedComponents,
+      });
+      for (let i = 0; i < unmatchedMounts.length; i++) {
+        contentWithMounts = contentWithMounts.replace(
+          `data-component-type="${unmatchedMounts[i]}"`,
+          `data-component-type="${unmatchedComponents[i]}"`
+        );
+      }
+    }
+  }
 
   // Generate structured data schemas
   const schemaMarkup = generateArticleSchemas({

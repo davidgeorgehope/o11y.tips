@@ -168,9 +168,15 @@ COMPONENT PLACEHOLDERS:
 Where interactive components are suggested, insert a placeholder like:
 {{COMPONENT:component-type:description}}
 
+You MUST use the EXACT component types listed below. Do NOT invent your own types.
+${outline.interactiveComponents.length > 0 ? `
+COMPONENTS TO PLACE (use these exact types and placements):
+${outline.interactiveComponents.map(c => `- Type: "${c.type}" | Placement: "${c.placement}" | Purpose: ${c.purpose}
+  Insert as: {{COMPONENT:${c.type}:${c.purpose}}}`).join('\n')}
+` : `
 Example:
 {{COMPONENT:quiz:Test your understanding of the key concepts}}
-{{COMPONENT:playground:Try modifying the code example}}
+{{COMPONENT:playground:Try modifying the code example}}`}
 
 OUTPUT:
 Write the complete article in Markdown. Start with the title as # heading.
