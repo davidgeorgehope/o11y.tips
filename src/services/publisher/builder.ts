@@ -110,7 +110,8 @@ ${mountingScript}
   );
 
   // Reconcile mount point types with actual component types
-  // The content LLM may use different type names than the outline's interactiveComponents
+  // The content LLM may use different type names than the outline's interactiveComponents,
+  // or some components may fail to generate, leaving orphan mount points
   if (parsedComponents.length > 0) {
     const mountTypeRegex = /data-component-type="([^"]+)"/g;
     const mountTypes = new Set<string>();
@@ -120,17 +121,19 @@ ${mountingScript}
     }
     const componentTypes = new Set(parsedComponents.map(c => c.type));
 
-    // Find unmatched mount points and unmatched components
+    // Find unmatched components (have no mount point) and unmatched mounts (have no component)
     const unmatchedMounts = [...mountTypes].filter(t => !componentTypes.has(t));
     const unmatchedComponents = [...componentTypes].filter(t => !mountTypes.has(t));
 
-    // If we have equal unmatched on both sides, remap mount points to component types
-    if (unmatchedMounts.length > 0 && unmatchedMounts.length === unmatchedComponents.length) {
+    // Remap each unmatched component to the first available unmatched mount point
+    if (unmatchedComponents.length > 0 && unmatchedMounts.length > 0) {
+      const remapCount = Math.min(unmatchedMounts.length, unmatchedComponents.length);
       logger.info('Reconciling component type mismatches', {
         unmatchedMounts,
         unmatchedComponents,
+        remapCount,
       });
-      for (let i = 0; i < unmatchedMounts.length; i++) {
+      for (let i = 0; i < remapCount; i++) {
         contentWithMounts = contentWithMounts.replace(
           `data-component-type="${unmatchedMounts[i]}"`,
           `data-component-type="${unmatchedComponents[i]}"`

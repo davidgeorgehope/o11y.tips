@@ -138,12 +138,20 @@ OUTLINE TO FOLLOW:
 Title: ${outline.title}
 
 Sections:
-${outline.sections.map((s, i) => `
+${outline.sections.map((s, i) => {
+    // Match section to interactiveComponent by placement to get the authoritative type
+    const matchedComponent = outline.interactiveComponents.find(
+      c => c.placement === s.heading
+    );
+    const componentHint = matchedComponent
+      ? `[INSERT HERE: {{COMPONENT:${matchedComponent.type}:${matchedComponent.purpose}}}]`
+      : '';
+    return `
 ${i + 1}. ${s.heading} (${s.type})
    Key points: ${s.keyPoints.join(', ')}
    Length: ~${s.estimatedLength} words
-   ${s.componentSuggestion ? `[COMPONENT PLACEHOLDER: ${s.componentSuggestion}]` : ''}
-`).join('\n')}
+   ${componentHint}`;
+  }).join('\n')}
 
 FORMATTING REQUIREMENTS:
 - Use Markdown formatting
