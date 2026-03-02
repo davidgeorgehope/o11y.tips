@@ -108,6 +108,8 @@ Select the BEST 1-2 topics to write about next. Consider:
 - Prioritize topics we have NOT covered: incident response, SLOs, cost optimization, team practices, migration guides, specific integrations, real-world case studies
 - Reject any candidate that could be confused with an existing article title
 - If none are different enough, return empty selectedIds
+- Prefer topics that lend themselves to NON "How to" formats (getting started guides, comparisons, lessons learned, deep dives, opinion pieces)
+- 62 out of 64 existing articles start with "How to" — we desperately need variety
 
 Respond with JSON:
 {

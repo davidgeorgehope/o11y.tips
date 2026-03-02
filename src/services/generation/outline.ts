@@ -109,7 +109,17 @@ Create a JSON outline:
 }
 
 REQUIREMENTS:
-1. Title should be compelling and include main keyword (can be a question like "How to..." or "What is...")
+1. Title MUST vary in format. AVOID starting with "How to" — we have too many. Choose ONE of these styles:
+   - Getting Started: "Getting Started with [Topic]: A Practical Guide"
+   - Explainer: "What Every SRE Should Know About [Topic]"
+   - Comparison: "[X] vs [Y]: Which Should You Choose in 2026?"
+   - Lessons: "5 Lessons We Learned Migrating to [Topic]"
+   - Deep Dive: "Understanding [Topic]: Beyond the Basics"
+   - Myth-busting: "Stop Doing [Bad Practice]: A Better Approach to [Topic]"
+   - Beginner: "A Beginner s Guide to [Topic]"
+   - Opinion: "Why [Topic] Is the Most Overlooked Part of Observability"
+   - Numbered: "7 [Topic] Mistakes That Cost You in Production"
+   - Only use "How to" if no other format fits (max 1 in 5 articles)
 2. Include 5-8 sections with varied types
 3. Suggest 1-3 interactive components that would genuinely help learning
 4. Match the voice analysis - ${voice.experienceLevel} level, ${voice.preferredFormat} format
