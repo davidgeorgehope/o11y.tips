@@ -83,13 +83,13 @@ async function autoQueueDiscoveredPosts(): Promise<number> {
     return 0;
   }
 
-  // Get recently published articles to avoid similar topics
-  const recentArticles = await db.query.content.findMany({
+  // Get ALL existing titles to avoid repetition
+  const allArticles = await db.query.content.findMany({
     orderBy: [desc(content.createdAt)],
-    limit: 10,
+    columns: { title: true },
   });
 
-  const recentTitles = recentArticles.map(a => a.title);
+  const recentTitles = allArticles.map(a => a.title);
 
   // Have LLM select the best 1-2 topics
   const prompt = `You are selecting topics for an observability blog (o11y.tips).
@@ -101,10 +101,13 @@ CANDIDATE TOPICS (with pain scores):
 ${pendingPosts.map((p, i) => `${i + 1}. [ID: ${p.id}] (score: ${p.painScore}) "${p.title}"`).join('\n')}
 
 Select the BEST 1-2 topics to write about next. Consider:
-- Avoid topics too similar to recently published articles
+- STRICTLY avoid topics that overlap with existing articles — check ALL titles above
+- We have WAY too many articles about cardinality, eBPF, and collector configuration — avoid these unless truly novel
 - Prefer specific, actionable pain points over generic ones
 - Prefer topics with higher pain scores
-- Ensure variety in the content
+- Prioritize topics we have NOT covered: incident response, SLOs, cost optimization, team practices, migration guides, specific integrations, real-world case studies
+- Reject any candidate that could be confused with an existing article title
+- If none are different enough, return empty selectedIds
 
 Respond with JSON:
 {

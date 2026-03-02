@@ -26,6 +26,9 @@ export async function runCleanupJob(): Promise<CleanupResult> {
   // 1. Clean up old rejected posts (older than 30 days)
   result.deletedPosts = await cleanupOldRejectedPosts();
 
+  // 1b. Clean up old unreviewed posts (older than 30 days)
+  result.deletedPosts += await cleanupOldUnreviewedContent();
+
   // 2. Clean up old failed jobs (older than 7 days)
   result.deletedJobs = await cleanupOldFailedJobs();
 
@@ -63,6 +66,29 @@ async function cleanupOldRejectedPosts(): Promise<number> {
 
   logger.info(`Deleted ${oldPosts.length} old rejected posts`);
   return oldPosts.length;
+}
+
+async function cleanupOldUnreviewedContent(): Promise<number> {
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const cutoffDate = thirtyDaysAgo.toISOString();
+
+  // Delete content stuck in "review" for over 30 days
+  const oldContent = await db.query.content.findMany({
+    where: and(
+      eq(content.status, 'review'),
+      lt(content.createdAt, cutoffDate)
+    ),
+    columns: { id: true, title: true },
+  });
+
+  if (oldContent.length === 0) return 0;
+
+  const ids = oldContent.map(c => c.id);
+  await db.delete(content).where(inArray(content.id, ids));
+
+  logger.info(`Auto-deleted ${oldContent.length} unreviewed posts older than 30 days`);
+  return oldContent.length;
 }
 
 async function cleanupOldFailedJobs(): Promise<number> {
