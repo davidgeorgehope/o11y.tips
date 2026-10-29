@@ -1,4 +1,4 @@
-import { generateWithClaude } from '../ai/clients.js';
+import { generateText } from '../ai/clients.js';
 import { createLogger } from '../../utils/logger.js';
 import { config } from '../../config.js';
 
@@ -179,9 +179,10 @@ export async function buildInteractiveArticle(
 
   const prompt = buildPrompt(input);
 
-  logger.debug('Sending to Claude Opus', { promptLength: prompt.length });
+  logger.debug('Sending to Grok', { promptLength: prompt.length });
 
-  const response = await generateWithClaude(prompt, {
+  const response = await generateText(prompt, {
+    model: 'pro',
     temperature: 0.4,
     systemPrompt: SYSTEM_PROMPT,
   });

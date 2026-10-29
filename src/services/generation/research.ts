@@ -1,4 +1,4 @@
-import { generateWithGeminiGroundedSearch, generateJSON } from '../ai/clients.js';
+import { generateWithWebSearch, generateJSON } from '../ai/clients.js';
 import { createLogger } from '../../utils/logger.js';
 import type { ResearchResult, GenerationContext, VoiceAnalysis } from './types.js';
 
@@ -19,7 +19,7 @@ export async function conductResearch(
 
   for (const query of queries.slice(0, 3)) {
     try {
-      const result = await generateWithGeminiGroundedSearch(query, {
+      const result = await generateWithWebSearch(query, {
         systemPrompt: `You are a technical researcher. Find accurate, up-to-date information about the topic.
 Focus on best practices, common solutions, and authoritative sources.
 Provide specific, actionable information.`,
@@ -126,7 +126,7 @@ Create a JSON object:
 }`;
 
   const response = await generateJSON<ResearchResult>(prompt, {
-    model: 'gemini-flash',
+    model: 'fast',
     temperature: 0.4,
   });
 

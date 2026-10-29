@@ -106,38 +106,19 @@ def get_published_articles() -> list:
         return []
 
 def categorize_and_draft(posts: list, articles: list) -> list:
-    """Use Gemini to categorize opportunities and draft responses."""
+    """Use Grok (xAI) to categorize opportunities and draft responses."""
     try:
-        from google import genai
-        from google.genai import types
+        from openai import OpenAI
     except ImportError:
-        print("  ⚠️  google-genai not available, using basic matching", file=sys.stderr)
+        print("  ⚠️  openai SDK not available, using basic matching", file=sys.stderr)
         return basic_categorize(posts, articles)
-    
-    # Load API key
-    api_key = os.environ.get("GOOGLE_AI_API_KEY")
+
+    api_key = os.environ.get("XAI_API_KEY")
     if not api_key:
-        # Try loading from vibecaster .env
-        env_path = "/root/vibecaster/backend/.env"
-        if os.path.exists(env_path):
-            with open(env_path) as f:
-                for line in f:
-                    if line.startswith("GOOGLE_AI_API_KEY="):
-                        api_key = line.split("=", 1)[1].strip().strip('"')
-        # Also try o11y.tips .env
-        if not api_key:
-            env_path = "/root/o11y.tips/.env"
-            if os.path.exists(env_path):
-                with open(env_path) as f:
-                    for line in f:
-                        if line.startswith("GOOGLE_AI_API_KEY="):
-                            api_key = line.split("=", 1)[1].strip().strip('"')
-    
-    if not api_key:
-        print("  ⚠️  No Gemini API key found", file=sys.stderr)
+        print("  ⚠️  No XAI_API_KEY set", file=sys.stderr)
         return basic_categorize(posts, articles)
-    
-    client = genai.Client(api_key=api_key)
+
+    client = OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
     
     articles_context = "\n".join([
         f"- [{a['title']}]({a['url']}): {a['description']}"
@@ -197,16 +178,14 @@ RULES:
 """
     
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.4,
-                response_mime_type="application/json",
-            )
+        response = client.chat.completions.create(
+            model="grok-4.3",
+            messages=[{"role": "user", "content": prompt + "\nReturn ONLY the JSON array."}],
+            temperature=0.4,
         )
-        
-        results = json.loads(response.text)
+        text = (response.choices[0].message.content or "").strip()
+        start, end = text.find("["), text.rfind("]") + 1
+        results = json.loads(text[start:end] if start >= 0 and end > start else text)
         
         # Enrich with original post data
         for r in results:
@@ -222,7 +201,7 @@ RULES:
         return results
         
     except Exception as e:
-        print(f"  ⚠️  Gemini categorization failed: {e}", file=sys.stderr)
+        print(f"  ⚠️  Grok categorization failed: {e}", file=sys.stderr)
         return basic_categorize(posts, articles)
 
 def basic_categorize(posts: list, articles: list) -> list:
@@ -339,7 +318,7 @@ def main():
     print(f"  {len(articles)} published o11y.tips articles for matching", file=sys.stderr)
     
     # 3. Categorize and draft
-    print("  🤖 Analyzing with Gemini...", file=sys.stderr)
+    print("  🤖 Analyzing with Grok...", file=sys.stderr)
     opportunities = categorize_and_draft(candidates, articles)
     
     # 4. Format digest

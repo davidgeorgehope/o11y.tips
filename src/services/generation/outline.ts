@@ -15,7 +15,7 @@ export async function generateOutline(
   const prompt = buildOutlinePrompt(context, voiceAnalysis, research);
 
   const response = await generateJSON<ContentOutline>(prompt, {
-    model: 'gemini-flash',
+    model: 'fast',
     temperature: 0.6,
     systemPrompt: `You are an expert technical content strategist specializing in GEO/AEO optimization.
 Create content outlines optimized for AI-powered search engines (Google AI Overviews, ChatGPT, Perplexity).

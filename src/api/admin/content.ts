@@ -6,7 +6,7 @@ import { publishContent, unpublishContent, publishAsInteractive } from '../../se
 import { buildArticle } from '../../services/publisher/builder.js';
 import { generateIndexPage, generateNicheIndexPage } from '../../services/publisher/index-generator.js';
 import { validateContent } from '../../services/quality/validator.js';
-import { generateWithClaude } from '../../services/ai/clients.js';
+import { generateText } from '../../services/ai/clients.js';
 import { createLogger } from '../../utils/logger.js';
 
 const logger = createLogger('api:admin:content');
@@ -629,7 +629,8 @@ app.post('/:id/chat', async (c) => {
   const userPrompt = 'Article Title: ' + article.title + '\n\nCurrent Content:\n```markdown\n' + (currentContent || article.content) + '\n```' + previewContext + '\n\n' + conversationPrompt + 'User request: ' + message;
 
   try {
-    const response = await generateWithClaude(userPrompt, {
+    const response = await generateText(userPrompt, {
+    model: 'pro',
       systemPrompt,
       maxTokens: 8192,
       temperature: 0.7,

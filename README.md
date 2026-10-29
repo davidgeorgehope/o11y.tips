@@ -5,7 +5,7 @@ A configurable, multi-niche automated content engine that discovers practitioner
 ## Features
 
 - **Multi-Source Discovery**: Find developer pain points from Reddit, Stack Overflow, Hacker News, GitHub Issues, and Google Search
-- **AI-Powered Content Generation**: Use Claude for code/components and Gemini for content
+- **AI-Powered Content Generation**: Use xAI Grok for content, code/components, web research and images
 - **Quality Pipeline**: SEO optimization, slop detection, and automated validation
 - **Interactive Components**: Generate React components for quizzes, playgrounds, and diagrams
 - **Admin UI**: Full-featured React admin panel for content management
@@ -16,7 +16,7 @@ A configurable, multi-niche automated content engine that discovers practitioner
 ### Prerequisites
 
 - Node.js 20+
-- API keys for Anthropic (Claude) and Google AI (Gemini)
+- An xAI API key
 
 ### Installation
 
@@ -71,8 +71,7 @@ npm run dev
 
 ```env
 # API Keys
-ANTHROPIC_API_KEY=     # Required for component generation
-GOOGLE_AI_API_KEY=     # Required for content generation
+XAI_API_KEY=           # Required for all AI features
 
 # Optional
 GITHUB_TOKEN=          # For GitHub Issues discovery

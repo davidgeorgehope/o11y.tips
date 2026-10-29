@@ -1,4 +1,4 @@
-import { generateWithClaude } from '../ai/clients.js';
+import { generateText } from '../ai/clients.js';
 import { createLogger } from '../../utils/logger.js';
 import type { GeneratedComponent, ContentOutline } from '../generation/types.js';
 
@@ -62,7 +62,8 @@ async function validateSingleComponent(
 ): Promise<{ issues: AlignmentIssue[]; suggestions: string[] }> {
   const prompt = buildValidationPrompt(component, outline);
 
-  const response = await generateWithClaude(prompt, {
+  const response = await generateText(prompt, {
+    model: 'pro',
     maxTokens: 2048,
     temperature: 0.2,
     systemPrompt: `You are an expert frontend developer reviewing React components for visual alignment and layout issues.
@@ -210,7 +211,8 @@ CORRECT: className={"px-4 " + (active ? "bg-blue-500" : "bg-gray-500")}
 
 Output ONLY the fixed component code wrapped in \`\`\`tsx code blocks.`;
 
-  const response = await generateWithClaude(prompt, {
+  const response = await generateText(prompt, {
+    model: 'pro',
     maxTokens: 4096,
     temperature: 0.2,
     systemPrompt: `You are an expert React developer fixing alignment issues in components.

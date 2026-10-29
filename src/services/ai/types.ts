@@ -47,7 +47,6 @@ export interface ComponentGenerationResult {
   dependencies: string[];
 }
 
-export type AIModel = 'claude-opus' | 'gemini-flash' | 'gemini-pro';
 
 export interface UsageTracker {
   track(usage: TokenUsage): void;

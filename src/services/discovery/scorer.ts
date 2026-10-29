@@ -10,7 +10,7 @@ export async function scorePainPoint(post: RawDiscoveredPost): Promise<ScoredPos
 
   try {
     const response = await generateJSON<PainAnalysis>(prompt, {
-      model: 'gemini-flash',
+      model: 'fast',
       temperature: 0.3,
       systemPrompt: `You are an expert at analyzing developer pain points and questions.
 Score how valuable this pain point would be for creating educational content.
