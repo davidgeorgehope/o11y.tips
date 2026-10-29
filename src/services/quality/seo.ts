@@ -59,7 +59,7 @@ export async function analyzeSEO(
   const prompt = buildSEOPrompt(title, description, content, targetKeywords);
 
   const response = await generateJSON<SEOAnalysis>(prompt, {
-    model: 'gemini-flash',
+    model: 'fast',
     temperature: 0.2,
     systemPrompt: `You are an SEO expert analyzing content for search optimization.
 Provide detailed, actionable analysis focused on both traditional SEO and GEO (Generative Engine Optimization).

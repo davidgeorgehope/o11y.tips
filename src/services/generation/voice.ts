@@ -10,7 +10,7 @@ export async function analyzeVoice(context: GenerationContext): Promise<VoiceAna
   const prompt = buildVoicePrompt(context);
 
   const response = await generateJSON<VoiceAnalysis>(prompt, {
-    model: 'gemini-flash',
+    model: 'fast',
     temperature: 0.3,
     systemPrompt: `You are an expert at analyzing how developers communicate and learn.
 Your job is to understand the original poster's experience level and learning style

@@ -1,4 +1,4 @@
-import { generateWithGemini } from '../ai/clients.js';
+import { generateText } from '../ai/clients.js';
 import { createLogger } from '../../utils/logger.js';
 import type { GeneratedContent, ContentOutline, GenerationContext, VoiceAnalysis, ResearchResult } from './types.js';
 
@@ -14,7 +14,7 @@ export async function generateContent(
 
   const prompt = buildContentPrompt(context, voiceAnalysis, research, outline);
 
-  const response = await generateWithGemini(prompt, {
+  const response = await generateText(prompt, {
     model: 'pro',
     temperature: 0.7,
     maxTokens: 8192,

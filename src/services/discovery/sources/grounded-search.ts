@@ -1,4 +1,4 @@
-import { generateWithGeminiGroundedSearch } from '../../ai/clients.js';
+import { generateWithWebSearch } from '../../ai/clients.js';
 import { createLogger } from '../../../utils/logger.js';
 import type { DiscoverySource, RawDiscoveredPost, SourceConfig } from '../types.js';
 
@@ -16,7 +16,7 @@ export const groundedSearchSource: DiscoverySource = {
         logger.debug('Running grounded search', { query });
 
         const currentYear = new Date().getFullYear();
-        const response = await generateWithGeminiGroundedSearch(
+        const response = await generateWithWebSearch(
           buildSearchPrompt(query, currentYear),
           {
             systemPrompt: `You are a research assistant finding developer pain points from ${currentYear}.

@@ -42,8 +42,7 @@ export const config = {
 
   // API Keys
   apiKeys: {
-    anthropic: getEnv('ANTHROPIC_API_KEY', ''),
-    googleAi: getEnv('GOOGLE_AI_API_KEY', ''),
+    xai: getEnv('XAI_API_KEY', ''),
     github: getEnv('GITHUB_TOKEN', ''),
   },
 
@@ -83,14 +82,10 @@ export const config = {
 
   // AI Model Configuration
   ai: {
-    claude: {
-      model: 'claude-opus-4-5-20251101',
-      maxTokens: 21000, // SDK limits non-streaming to ~21K (10 min timeout)
-    },
-    gemini: {
-      flashModel: 'gemini-3-flash-preview',
-      proModel: 'gemini-3.1-pro-preview',
-      imageModel: 'gemini-3-pro-image-preview',
+    xai: {
+      fastModel: 'grok-4.3',
+      proModel: 'grok-4.7',
+      imageModel: 'grok-imagine-image-2.0',
     },
   },
 
@@ -120,12 +115,8 @@ export function validateConfig(): void {
   const warnings: string[] = [];
   const errors: string[] = [];
 
-  if (!config.apiKeys.anthropic) {
-    warnings.push('ANTHROPIC_API_KEY not set - Claude features will be disabled');
-  }
-
-  if (!config.apiKeys.googleAi) {
-    warnings.push('GOOGLE_AI_API_KEY not set - Gemini features will be disabled');
+  if (!config.apiKeys.xai) {
+    warnings.push('XAI_API_KEY not set - AI features will be disabled');
   }
 
   if (config.admin.password === 'admin') {

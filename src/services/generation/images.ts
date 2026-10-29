@@ -92,7 +92,7 @@ Maximum 3 images total. Quality over quantity.`;
 
   try {
     const response = await generateJSON<{ images: ImageSpec[] }>(prompt, {
-      model: 'gemini-flash',
+      model: 'fast',
       temperature: 0.5,
     });
 
@@ -132,7 +132,8 @@ async function generateSingleImage(
 
   const image = images[0];
   const id = generateId();
-  const filename = `${content.slug}-${spec.type}-${id}.png`;
+  const ext = image.mimeType === 'image/jpeg' ? 'jpg' : 'png';
+  const filename = `${content.slug}-${spec.type}-${id}.${ext}`;
 
   // Ensure output directory exists
   const outputDir = join(config.paths.output, 'images', context.nicheId);
@@ -143,8 +144,8 @@ async function generateSingleImage(
   // Save the image
   await writeFile(filePath, image.data);
 
-  // Get image dimensions (PNG header parsing)
-  const { width, height } = getPngDimensions(image.data);
+  // Get image dimensions (PNG/JPEG header parsing)
+  const { width, height } = getImageDimensions(image.data);
 
   return {
     id,
@@ -173,17 +174,29 @@ Context: Technical article about ${content.title}
 Requirements: High quality, professional, suitable for web article`;
 }
 
-function getPngDimensions(buffer: Buffer): { width: number; height: number } {
-  // PNG header: 8 byte signature, then IHDR chunk
-  // IHDR starts at byte 8, chunk type at 12-15 is "IHDR"
-  // Width is at bytes 16-19, height at 20-23 (big endian)
-
-  if (buffer.length < 24) {
-    return { width: 0, height: 0 };
+function getImageDimensions(buffer: Buffer): { width: number; height: number } {
+  // PNG: IHDR width/height at bytes 16-23 (big endian)
+  if (buffer.length >= 24 && buffer.readUInt32BE(0) === 0x89504e47) {
+    return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
   }
 
-  const width = buffer.readUInt32BE(16);
-  const height = buffer.readUInt32BE(20);
+  // JPEG: scan segments for a Start Of Frame marker
+  if (buffer.length >= 4 && buffer[0] === 0xff && buffer[1] === 0xd8) {
+    let offset = 2;
+    while (offset + 9 < buffer.length) {
+      if (buffer[offset] !== 0xff) {
+        offset++;
+        continue;
+      }
+      const marker = buffer[offset + 1];
+      const length = buffer.readUInt16BE(offset + 2);
+      const isSof = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
+      if (isSof) {
+        return { height: buffer.readUInt16BE(offset + 5), width: buffer.readUInt16BE(offset + 7) };
+      }
+      offset += 2 + length;
+    }
+  }
 
-  return { width, height };
+  return { width: 0, height: 0 };
 }

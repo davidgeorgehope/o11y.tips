@@ -1,5 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { GoogleGenAI } from '@google/genai';
+import OpenAI from 'openai';
 import { config } from '../../config.js';
 import { withRetry } from '../../utils/retry.js';
 import { createLogger } from '../../utils/logger.js';
@@ -61,227 +60,135 @@ class UsageTrackerImpl {
 
 export const usageTracker = new UsageTrackerImpl();
 
-// Claude Client
-let anthropicClient: Anthropic | null = null;
+// xAI (Grok) client - OpenAI-compatible API
+let xaiClient: OpenAI | null = null;
 
-function getAnthropicClient(): Anthropic {
-  if (!anthropicClient) {
-    if (!config.apiKeys.anthropic) {
-      throw new Error('Anthropic API key not configured');
+function getXaiClient(): OpenAI {
+  if (!xaiClient) {
+    if (!config.apiKeys.xai) {
+      throw new Error('xAI API key not configured');
     }
-    anthropicClient = new Anthropic({
-      apiKey: config.apiKeys.anthropic,
+    xaiClient = new OpenAI({
+      apiKey: config.apiKeys.xai,
+      baseURL: 'https://api.x.ai/v1',
+      timeout: 15 * 60 * 1000,
     });
   }
-  return anthropicClient;
+  return xaiClient;
 }
 
-export async function generateWithClaude(
-  prompt: string,
-  options: GenerateOptions = {}
-): Promise<AIResponse> {
-  const client = getAnthropicClient();
-  const model = config.ai.claude.model;
+export type ModelTier = 'fast' | 'pro';
 
-  logger.debug('Generating with Claude', { model, promptLength: prompt.length });
+function modelFor(tier: ModelTier = 'fast'): string {
+  return tier === 'pro' ? config.ai.xai.proModel : config.ai.xai.fastModel;
+}
 
-  const response = await withRetry(async () => {
-    const messages: Anthropic.MessageParam[] = [
-      { role: 'user', content: prompt }
-    ];
-
-    const params: Anthropic.MessageCreateParams = {
-      model,
-      max_tokens: options.maxTokens || config.ai.claude.maxTokens,
-      messages,
-    };
-
-    if (options.systemPrompt) {
-      params.system = options.systemPrompt;
-    }
-
-    if (options.temperature !== undefined) {
-      params.temperature = options.temperature;
-    }
-
-    if (options.stopSequences) {
-      params.stop_sequences = options.stopSequences;
-    }
-
-    return client.messages.create(params);
-  });
-
-  const content = response.content
-    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-    .map(block => block.text)
-    .join('');
-
+function trackUsage(model: string, input = 0, output = 0): TokenUsage {
   const usage: TokenUsage = {
-    inputTokens: response.usage.input_tokens,
-    outputTokens: response.usage.output_tokens,
-    totalTokens: response.usage.input_tokens + response.usage.output_tokens,
+    inputTokens: input,
+    outputTokens: output,
+    totalTokens: input + output,
     model,
     timestamp: new Date().toISOString(),
   };
-
   usageTracker.track(usage);
-  logger.debug('Claude response received', { usage, stopReason: response.stop_reason });
-
-  return { content, usage, stopReason: response.stop_reason };
+  return usage;
 }
 
-// Gemini Client
-let googleClient: GoogleGenAI | null = null;
-
-function getGoogleClient(): GoogleGenAI {
-  if (!googleClient) {
-    if (!config.apiKeys.googleAi) {
-      throw new Error('Google AI API key not configured');
-    }
-    googleClient = new GoogleGenAI({
-      apiKey: config.apiKeys.googleAi,
-    });
-  }
-  return googleClient;
-}
-
-export async function generateWithGemini(
+export async function generateText(
   prompt: string,
-  options: GenerateOptions & { model?: 'flash' | 'pro' } = {}
+  options: GenerateOptions & { model?: ModelTier } = {}
 ): Promise<AIResponse> {
-  const client = getGoogleClient();
-  const modelName = options.model === 'pro'
-    ? config.ai.gemini.proModel
-    : config.ai.gemini.flashModel;
+  const client = getXaiClient();
+  const model = modelFor(options.model);
 
-  logger.debug('Generating with Gemini', { model: modelName, promptLength: prompt.length });
+  logger.debug('Generating with Grok', { model, promptLength: prompt.length });
 
-  const response = await withRetry(async () => {
-    const result = await client.models.generateContent({
-      model: modelName,
-      contents: prompt,
-      config: {
-        maxOutputTokens: options.maxTokens || 8192,
-        temperature: options.temperature,
-        stopSequences: options.stopSequences,
-        systemInstruction: options.systemPrompt,
-      },
-    });
-    return result;
-  });
+  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [];
+  if (options.systemPrompt) {
+    messages.push({ role: 'system', content: options.systemPrompt });
+  }
+  messages.push({ role: 'user', content: prompt });
 
-  const content = response.text || '';
-  const usageMetadata = response.usageMetadata;
+  const response = await withRetry(() =>
+    client.chat.completions.create({
+      model,
+      messages,
+      max_tokens: options.maxTokens,
+      temperature: options.temperature,
+      stop: options.stopSequences,
+    })
+  );
 
-  const usage: TokenUsage = {
-    inputTokens: usageMetadata?.promptTokenCount || 0,
-    outputTokens: usageMetadata?.candidatesTokenCount || 0,
-    totalTokens: usageMetadata?.totalTokenCount || 0,
-    model: modelName,
-    timestamp: new Date().toISOString(),
-  };
+  const choice = response.choices[0];
+  const usage = trackUsage(model, response.usage?.prompt_tokens, response.usage?.completion_tokens);
+  logger.debug('Grok response received', { usage, stopReason: choice?.finish_reason });
 
-  usageTracker.track(usage);
-  logger.debug('Gemini response received', { usage });
-
-  return { content, usage };
+  return { content: choice?.message?.content || '', usage, stopReason: choice?.finish_reason };
 }
 
-export async function generateWithGeminiGroundedSearch(
+export async function generateWithWebSearch(
   query: string,
   options: GenerateOptions = {}
 ): Promise<GroundedSearchResponse> {
-  const client = getGoogleClient();
-  const modelName = config.ai.gemini.flashModel;
+  const client = getXaiClient();
+  const model = config.ai.xai.fastModel;
 
-  logger.debug('Generating with Gemini grounded search', { query });
+  logger.debug('Generating with Grok web search', { query });
 
-  const response = await withRetry(async () => {
-    const result = await client.models.generateContent({
-      model: modelName,
-      contents: query,
-      config: {
-        maxOutputTokens: options.maxTokens || 4096,
-        temperature: options.temperature || 0.7,
-        systemInstruction: options.systemPrompt,
-        tools: [{ googleSearch: {} }],
-      },
-    });
-    return result;
-  });
+  const response = await withRetry(() =>
+    client.responses.create({
+      model,
+      input: query,
+      instructions: options.systemPrompt,
+      temperature: options.temperature ?? 0.7,
+      tools: [{ type: 'web_search' } as unknown as OpenAI.Responses.Tool],
+    })
+  );
 
-  const content = response.text || '';
-  const usageMetadata = response.usageMetadata;
-
-  // Extract grounding metadata for sources
   const sources: SearchResult[] = [];
-  const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
-
-  if (groundingMetadata?.groundingChunks) {
-    for (const chunk of groundingMetadata.groundingChunks) {
-      if (chunk.web) {
-        sources.push({
-          title: chunk.web.title || '',
-          url: chunk.web.uri || '',
-          snippet: '',
-        });
-      }
-    }
-  }
-
-  const usage: TokenUsage = {
-    inputTokens: usageMetadata?.promptTokenCount || 0,
-    outputTokens: usageMetadata?.candidatesTokenCount || 0,
-    totalTokens: usageMetadata?.totalTokenCount || 0,
-    model: `${modelName}+grounding`,
-    timestamp: new Date().toISOString(),
-  };
-
-  usageTracker.track(usage);
-  logger.debug('Gemini grounded search response received', { usage, sourceCount: sources.length });
-
-  return { content, sources, usage };
-}
-
-export async function generateImage(
-  prompt: string,
-  _options: ImageGenerationOptions = {}
-): Promise<GeneratedImage[]> {
-  const client = getGoogleClient();
-  const modelName = config.ai.gemini.imageModel;
-
-  logger.debug('Generating image with Gemini', { prompt: prompt.substring(0, 100) });
-
-  // Use Gemini native image generation (generate_content with IMAGE modality)
-  const response = await withRetry(async () => {
-    const result = await client.models.generateContent({
-      model: modelName,
-      contents: prompt,
-      config: {
-        responseModalities: ['IMAGE'],
-      },
-    });
-    return result;
-  });
-
-  const images: GeneratedImage[] = [];
-
-  // Extract image from response candidates (Gemini native format)
-  if (response.candidates) {
-    for (const candidate of response.candidates) {
-      if (candidate.content?.parts) {
-        for (const part of candidate.content.parts) {
-          // Check for inline_data (raw image bytes)
-          if (part.inlineData?.data) {
-            images.push({
-              data: Buffer.from(part.inlineData.data, 'base64'),
-              mimeType: part.inlineData.mimeType || 'image/png',
-            });
-          }
+  const seen = new Set<string>();
+  for (const item of response.output) {
+    if (item.type !== 'message') continue;
+    for (const part of item.content) {
+      if (part.type !== 'output_text') continue;
+      for (const ann of part.annotations || []) {
+        if (ann.type === 'url_citation' && !seen.has(ann.url)) {
+          seen.add(ann.url);
+          sources.push({ title: ann.title || '', url: ann.url, snippet: '' });
         }
       }
     }
   }
+
+  const usage = trackUsage(`${model}+web_search`, response.usage?.input_tokens, response.usage?.output_tokens);
+  logger.debug('Grok web search response received', { usage, sourceCount: sources.length });
+
+  return { content: response.output_text || '', sources, usage };
+}
+
+export async function generateImage(
+  prompt: string,
+  options: ImageGenerationOptions = {}
+): Promise<GeneratedImage[]> {
+  const client = getXaiClient();
+  const model = config.ai.xai.imageModel;
+
+  logger.debug('Generating image with Grok Imagine', { prompt: prompt.substring(0, 100) });
+
+  const response = await withRetry(() =>
+    client.images.generate({
+      model,
+      prompt,
+      n: options.numberOfImages || 1,
+      response_format: 'b64_json',
+      ...(options.aspectRatio ? { aspect_ratio: options.aspectRatio } : {}),
+    } as OpenAI.Images.ImageGenerateParamsNonStreaming)
+  );
+
+  const images: GeneratedImage[] = (response.data || [])
+    .filter(d => d.b64_json)
+    .map(d => ({ data: Buffer.from(d.b64_json as string, 'base64'), mimeType: 'image/jpeg' }));
 
   logger.debug('Image generation complete', { count: images.length });
 
@@ -291,22 +198,13 @@ export async function generateImage(
 // JSON extraction helper
 export async function generateJSON<T>(
   prompt: string,
-  options: GenerateOptions & { model?: 'claude' | 'gemini-flash' | 'gemini-pro' } = {}
+  options: GenerateOptions & { model?: ModelTier } = {}
 ): Promise<AIResponse<T>> {
   const fullPrompt = `${prompt}
 
 Respond with valid JSON only, no markdown code blocks or other formatting.`;
 
-  let response: AIResponse;
-
-  if (options.model === 'claude') {
-    response = await generateWithClaude(fullPrompt, options);
-  } else {
-    response = await generateWithGemini(fullPrompt, {
-      ...options,
-      model: options.model === 'gemini-pro' ? 'pro' : 'flash',
-    });
-  }
+  const response = await generateText(fullPrompt, options);
 
   // Clean up the response content
   let jsonContent = response.content.trim();
@@ -332,4 +230,4 @@ Respond with valid JSON only, no markdown code blocks or other formatting.`;
   }
 }
 
-export { getAnthropicClient, getGoogleClient };
+export { getXaiClient };

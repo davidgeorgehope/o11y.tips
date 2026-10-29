@@ -121,7 +121,7 @@ If none of the candidates are good enough, return empty selectedIds array.`;
 
   try {
     const response = await generateJSON<{ selectedIds: string[]; reasoning: string }>(prompt, {
-      model: 'gemini-flash',
+      model: 'fast',
       temperature: 0.3,
     });
 

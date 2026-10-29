@@ -101,7 +101,7 @@ export default function ContentChat({ contentId, currentContent, onApplyChanges,
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-semibold">AI Editor</h3>
-            <p className="text-xs text-gray-500">Ask Claude to help edit this content</p>
+            <p className="text-xs text-gray-500">Ask Grok to help edit this content</p>
           </div>
         </div>
         <div className="mt-2 flex items-center gap-2">
@@ -216,7 +216,7 @@ export default function ContentChat({ contentId, currentContent, onApplyChanges,
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask Claude to edit the content..."
+            placeholder="Ask Grok to edit the content..."
             className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"
             rows={2}
             disabled={loading}

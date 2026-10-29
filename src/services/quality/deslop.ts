@@ -1,4 +1,4 @@
-import { generateWithGemini, generateJSON } from '../ai/clients.js';
+import { generateText, generateJSON } from '../ai/clients.js';
 import { createLogger } from '../../utils/logger.js';
 
 const logger = createLogger('quality:deslop');
@@ -192,7 +192,7 @@ Be specific in suggestions - point to actual issues in the text.`;
       suggestions: string[];
       overallAssessment: string;
     }>(prompt, {
-      model: 'gemini-flash',
+      model: 'fast',
       temperature: 0.2,
     });
 
@@ -233,7 +233,7 @@ DO NOT:
 
 Output the improved content directly, no explanations.`;
 
-  const response = await generateWithGemini(prompt, {
+  const response = await generateText(prompt, {
     model: 'pro',
     temperature: 0.3,
     maxTokens: 8192,

@@ -1,4 +1,4 @@
-import { generateWithClaude } from '../ai/clients.js';
+import { generateText } from '../ai/clients.js';
 import { createLogger } from '../../utils/logger.js';
 import { generateId } from '../../utils/hash.js';
 import * as esbuild from 'esbuild';
@@ -164,7 +164,8 @@ async function generateComponent(
 ): Promise<GeneratedComponent | null> {
   const prompt = buildComponentPrompt(spec, content, context, previousError);
 
-  const response = await generateWithClaude(prompt, {
+  const response = await generateText(prompt, {
+    model: 'pro',
     maxTokens: 8192,
     temperature: 0.3,
     systemPrompt: `You are an expert React developer creating interactive educational components.

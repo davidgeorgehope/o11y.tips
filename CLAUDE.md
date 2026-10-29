@@ -83,8 +83,7 @@ SQLite database at `./data/content-engine.db` with tables:
 Key settings in `.env`:
 - `PUBLIC_URL` - Canonical URL for SEO (https://o11y.tips)
 - `PORT` - Server port (3005)
-- `ANTHROPIC_API_KEY` - Claude API key
-- `GOOGLE_AI_API_KEY` - Gemini API key for images
+- `XAI_API_KEY` - xAI (Grok) API key for text, web search and images
 
 ## Common Tasks
 
