@@ -89,7 +89,7 @@ export const config = {
     },
     gemini: {
       flashModel: 'gemini-3-flash-preview',
-      proModel: 'gemini-3-pro-preview',
+      proModel: 'gemini-3.1-pro-preview',
       imageModel: 'gemini-3-pro-image-preview',
     },
   },
