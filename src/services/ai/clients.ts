@@ -117,6 +117,8 @@ export async function generateText(
       max_tokens: options.maxTokens,
       temperature: options.temperature,
       stop: options.stopSequences,
+      // 'fast' tier = grok-4.7 with low reasoning
+      ...(options.model === 'pro' ? {} : { reasoning_effort: 'low' as const }),
     })
   );
 

@@ -83,7 +83,7 @@ export const config = {
   // AI Model Configuration
   ai: {
     xai: {
-      fastModel: 'grok-4.3',
+      fastModel: 'grok-4.7',
       proModel: 'grok-4.7',
       imageModel: 'grok-imagine-image-2.0',
     },

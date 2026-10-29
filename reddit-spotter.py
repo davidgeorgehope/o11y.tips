@@ -179,7 +179,7 @@ RULES:
     
     try:
         response = client.chat.completions.create(
-            model="grok-4.3",
+            model="grok-4.7",
             messages=[{"role": "user", "content": prompt + "\nReturn ONLY the JSON array."}],
             temperature=0.4,
         )
